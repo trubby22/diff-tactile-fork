@@ -67,7 +67,7 @@ class Contact:
         self.fem_sensor1.mu[None] = 1294.01
         self.fem_sensor1.lam[None] = 9201.11
 
-        self.contact_idx = ti.Vector.field(self.num_sensor, dtype=int, shape=(self.sub_steps, self.mpm_object.n_grid, self.mpm_object.n_grid, self.mpm_object.n_grid)) # indicating the contact seg idx of fem sensor for closested triangle mesh
+        self.contact_idx = ti.Vector.field(self.num_sensor, dtype=int, shape=(self.sub_steps, self.mpm_object.n_grid, self.mpm_object.n_grid, self.mpm_object.n_grid)) # indicating the contact seg idx of fem sensor for closest triangle mesh
         self.total_ext_f = ti.Vector.field(3, dtype=float, shape=())
 
         # control parameters
@@ -551,7 +551,7 @@ def transform_2d(point, angle, translate):
 
 
 def main():
-    ti.init(arch=ti.gpu, device_memory_GB=4)
+    ti.init(arch=ti.gpu, device_memory_GB=9)
 
     obj_name = "earpod-case.stl"
     num_sub_steps = 50
