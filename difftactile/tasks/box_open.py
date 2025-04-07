@@ -500,15 +500,15 @@ class Contact:
         self.fem_sensor1.extract_markers(0)
         init_2d = self.fem_sensor1.virtual_markers.to_numpy()
         marker_2d = self.fem_sensor1.predict_markers.to_numpy()
-        self.draw_markers(init_2d, marker_2d, gui2)
+        # self.draw_markers(init_2d, marker_2d, gui2)
         self.draw_perspective(0)
         gui1.circles(viz_scale * self.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
         gui1.circles(viz_scale * self.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
         # gui1.circles(viz_scale * self.draw_pos4.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-        self.draw_triangles(self.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
+        # self.draw_triangles(self.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
         gui1.show()
-        gui2.show()
-        gui3.show()
+        # gui2.show()
+        # gui3.show()
 
     def apply_action(self, action, ts):
         if ts < self.total_steps // 4:
@@ -562,8 +562,10 @@ def main():
 
     if not off_screen:
         gui1 = ti.GUI("Contact Viz")
-        gui2 = ti.GUI("Force Map 1")
-        gui3 = ti.GUI("Deformation Map 1")
+        # gui2 = ti.GUI("Force Map 1")
+        gui2 = None
+        # gui3 = ti.GUI("Deformation Map 1")
+        gui3 = None
 
     losses = []
     contact_model.init_pos_control()
@@ -616,7 +618,7 @@ def main():
                 contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
                 marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
-                contact_model.draw_markers(init_2d, marker_2d, gui2)
+                # contact_model.draw_markers(init_2d, marker_2d, gui2)
 
             ### the external force is not propogate to the last time step but the second last
             # contact_model.draw_external_force(contact_model.fem_sensor1.sub_steps-2)
@@ -624,11 +626,11 @@ def main():
                 contact_model.draw_perspective(0)
                 gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
                 gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-                contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
+                # contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
                 # contact_model.draw_deformation(scene, camera, window)
                 gui1.show()
-                gui2.show()
-                gui3.show()
+                # gui2.show()
+                # gui3.show()
 
         ## backward!
         loss_frame = 0
@@ -697,18 +699,18 @@ def main():
                 contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
                 marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
-                contact_model.draw_markers(init_2d, marker_2d, gui2)
+                # contact_model.draw_markers(init_2d, marker_2d, gui2)
 
                 contact_model.draw_perspective(0)
                 gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
                 gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-                contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
+                # contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
                 # contact_model.draw_deformation(scene, camera, window)
 
 
                 gui1.show()
-                gui2.show()
-                gui3.show()
+                # gui2.show()
+                # gui3.show()
 
         losses.append(loss_frame)
 
