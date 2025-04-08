@@ -31,7 +31,7 @@ class Contact:
         self.total_steps = total_steps
         self.sub_steps = sub_steps
         self.fem_sensor1 = FEMDomeSensor(dt, sub_steps)
-        self.space_scale = 48.0
+        self.space_scale = 8.0
         self.obj_scale = 6.0
         self.use_tactile = use_tactile
         self.use_state = use_state
@@ -131,7 +131,7 @@ class Contact:
         rx1 = 0.0
         ry1 = 0.0
         rz1 = 90.0
-        t_dx1 = 7.75
+        t_dx1 = 8.75
         t_dy1 = 4.5
         t_dz1 = 5.0
 
@@ -158,7 +158,7 @@ class Contact:
         # initial position for sensor 1 & 2
 
         #Pressing
-        vx1 = 0.0; vy1 = 50.0; vz1 = 0.0
+        vx1 = 0.0; vy1 = 0.0; vz1 = 0.0
 
         rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
 
@@ -497,14 +497,14 @@ class Contact:
         self.fem_sensor1.extract_markers(0)
         init_2d = self.fem_sensor1.virtual_markers.to_numpy()
         marker_2d = self.fem_sensor1.predict_markers.to_numpy()
-        # self.draw_markers(init_2d, marker_2d, gui2)
+        self.draw_markers(init_2d, marker_2d, gui2)
         self.draw_perspective(0)
         gui1.circles(viz_scale * self.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
         gui1.circles(viz_scale * self.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
         # gui1.circles(viz_scale * self.draw_pos4.to_numpy() + viz_offset, radius=2, color=0xe6c949)
         # self.draw_triangles(self.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
         gui1.show()
-        # gui2.show()
+        gui2.show()
         # gui3.show()
 
     def apply_action(self, action, ts):
@@ -551,16 +551,16 @@ def main():
     ti.init(arch=ti.gpu, device_memory_GB=9)
 
     obj_name = "earpod-case.stl"
-    num_sub_steps = 50
-    num_total_steps = 10
-    num_opt_steps = 10
+    num_sub_steps = 10
+    num_total_steps = 5_000
+    num_opt_steps = 100
     dt = 5e-5
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
 
     if not off_screen:
         gui1 = ti.GUI("Contact Viz")
-        # gui2 = ti.GUI("Force Map 1")
-        gui2 = None
+        gui2 = ti.GUI("Force Map 1")
+        # gui2 = None
         # gui3 = ti.GUI("Deformation Map 1")
         gui3 = None
 
@@ -615,7 +615,7 @@ def main():
                 contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
                 marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
-                # contact_model.draw_markers(init_2d, marker_2d, gui2)
+                contact_model.draw_markers(init_2d, marker_2d, gui2)
 
             ### the external force is not propogate to the last time step but the second last
             # contact_model.draw_external_force(contact_model.fem_sensor1.sub_steps-2)
@@ -626,7 +626,7 @@ def main():
                 # contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
                 # contact_model.draw_deformation(scene, camera, window)
                 gui1.show()
-                # gui2.show()
+                gui2.show()
                 # gui3.show()
 
         ## backward!
@@ -696,7 +696,7 @@ def main():
                 contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
                 marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
-                # contact_model.draw_markers(init_2d, marker_2d, gui2)
+                contact_model.draw_markers(init_2d, marker_2d, gui2)
 
                 contact_model.draw_perspective(0)
                 gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
@@ -706,7 +706,7 @@ def main():
 
 
                 gui1.show()
-                # gui2.show()
+                gui2.show()
                 # gui3.show()
 
         losses.append(loss_frame)
