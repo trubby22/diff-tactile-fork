@@ -22,7 +22,6 @@ import argparse
 TI_TYPE = ti.f32
 NP_TYPE = np.float32
 
-
 @ti.data_oriented
 class Contact:
     def __init__(self, use_tactile, use_state, dt=5e-5, total_steps=300, sub_steps=50,obj=None):
@@ -180,8 +179,6 @@ class Contact:
 
     @ti.kernel
     def set_pos_control(self, f:ti.i32):
-        # print(self.p_sensor1[f], self.o_sensor1[f])
-        # self.fem_sensor1.set_pose_control(self.p_sensor1[f], self.o_sensor1[f])
         self.fem_sensor1.d_pos[None] = self.p_sensor1[f]
         self.fem_sensor1.d_ori[None] = self.o_sensor1[f]
 
@@ -292,7 +289,7 @@ class Contact:
         self.loss[None] += self.beta[None] *((self.predict_force1[None][1] - self.target_force1[None][1])**2 + (self.predict_force1[None][0] - self.target_force1[None][0])**2)
 
     def load_target(self):
-        self.target_force1[None] = ti.Vector([-25000.0, -1000.0, 0.0]) # maybe don't penalize fx
+        self.target_force1[None] = ti.Vector([-25_000.0, -1_000.0, 0.0]) # maybe don't penalize fx
         self.target_angle[None] = 0.3
 
     @ti.func
@@ -556,7 +553,7 @@ def main():
     obj_name = "earpod-case.stl"
     num_sub_steps = 50
     num_total_steps = 10
-    num_opt_steps = 100
+    num_opt_steps = 10
     dt = 5e-5
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
 
@@ -703,7 +700,7 @@ def main():
 
                 contact_model.draw_perspective(0)
                 gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
-                gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=20, color=0xe6c949)
+                gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
                 # contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
                 # contact_model.draw_deformation(scene, camera, window)
 
