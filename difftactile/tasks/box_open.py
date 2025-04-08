@@ -31,9 +31,8 @@ class Contact:
         self.dt = dt
         self.total_steps = total_steps
         self.sub_steps = sub_steps
-        self.dim = 3
         self.fem_sensor1 = FEMDomeSensor(dt, sub_steps)
-        self.space_scale = 10.0
+        self.space_scale = 48.0
         self.obj_scale = 6.0
         self.use_tactile = use_tactile
         self.use_state = use_state
@@ -42,7 +41,7 @@ class Contact:
                       obj_name=obj,
                       space_scale = self.space_scale,
                       obj_scale = self.obj_scale,
-                      density = 1.50,
+                      density = 1.5,
                       rho = 0.2)
 
         self.alpha = ti.field(float, ())
@@ -116,10 +115,10 @@ class Contact:
         self.angle_z = ti.field(float, ())
 
     def init(self):
-        self.ball_pos = [4.9, 3.00, 5.0]
-        self.ball_ori = [0.0, 90.0, 0.0]
-        self.ball_vel = [0.0, 0.0, 0.0]
-        self.mpm_object.init(self.ball_pos, self.ball_ori, self.ball_vel)
+        self.obj_pos = [4.9, 3.00, 5.0]
+        self.obj_ori = [0.0, 90.0, 0.0]
+        self.obj_vel = [0.0, 0.0, 0.0]
+        self.mpm_object.init(self.obj_pos, self.obj_ori, self.obj_vel)
 
         ### extract the height of the obj
         obj_pos = self.mpm_object.x_0.to_numpy()[0,:]
@@ -160,23 +159,24 @@ class Contact:
         # initial position for sensor 1 & 2
 
         #Pressing
-        vx1 = 0.0; vy1 = 0.8; vz1 = 0.0
+        vx1 = 0.0; vy1 = 50.0; vz1 = 0.0
 
         rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
 
         prepare_step = self.total_steps//4
-        for i in range(0, prepare_step):
+        # for i in range(0, prepare_step):
+        for i in range(0, self.total_steps):
 
             self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
-        vx1 = 0.8; vy1 = 0.0; vz1 = 0.0
+        # vx1 = 0.0; vy1 = 0.0; vz1 = 0.0
 
-        rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
+        # rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
 
-        for i in range(prepare_step, self.total_steps):
-            self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
-            self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
+        # for i in range(prepare_step, self.total_steps):
+        #     self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
+        #     self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
     @ti.kernel
     def set_pos_control(self, f:ti.i32):
@@ -512,10 +512,10 @@ class Contact:
 
     def apply_action(self, action, ts):
         if ts < self.total_steps // 4:
-            d_pos = np.array([action[0], action[1] + 0.8, action[2]])
+            d_pos = np.array([action[0], action[1], action[2]])
             d_ori = np.array([action[3], action[4], action[5]])
         else:
-            d_pos = np.array([action[0] + 0.8, action[1], action[2]])
+            d_pos = np.array([action[0], action[1], action[2]])
             d_ori = np.array([action[3], action[4], action[5]])
         self.fem_sensor1.d_pos.from_numpy(d_pos)
         self.fem_sensor1.d_ori.from_numpy(d_ori)
@@ -555,7 +555,7 @@ def main():
 
     obj_name = "earpod-case.stl"
     num_sub_steps = 50
-    num_total_steps = 600
+    num_total_steps = 10
     num_opt_steps = 100
     dt = 5e-5
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
@@ -610,8 +610,8 @@ def main():
 
 
             ## visualizationw
-            viz_scale = 0.1
-            viz_offset = [0.0, 0.0]
+            viz_scale = 0.15
+            viz_offset = [-0.2, 0.0]
             # contact_model.lossNone] = 0.0
 
             if not off_screen:
@@ -673,8 +673,8 @@ def main():
             grad_o1 = contact_model.o_sensor1.grad[ts]
 
 
-            lr_p = 1e3
-            lr_o = 1e1
+            lr_p = 1e4
+            lr_o = 1e4
             contact_model.p_sensor1[ts] -= lr_p * grad_p1
             contact_model.o_sensor1[ts] -= lr_o * grad_o1
 
@@ -703,7 +703,7 @@ def main():
 
                 contact_model.draw_perspective(0)
                 gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
-                gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
+                gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=20, color=0xe6c949)
                 # contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
                 # contact_model.draw_deformation(scene, camera, window)
 
