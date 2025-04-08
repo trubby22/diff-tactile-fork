@@ -31,7 +31,7 @@ class Contact:
         self.total_steps = total_steps
         self.sub_steps = sub_steps
         self.fem_sensor1 = FEMDomeSensor(dt, sub_steps)
-        self.space_scale = 48.0
+        self.space_scale = 8.0
         self.obj_scale = 6.0
         self.use_tactile = use_tactile
         self.use_state = use_state
@@ -158,7 +158,7 @@ class Contact:
         # initial position for sensor 1 & 2
 
         #Pressing
-        vx1 = 0.0; vy1 = 50.0; vz1 = 0.0
+        vx1 = 0.0; vy1 = 0.0; vz1 = 0.0
 
         rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
 
@@ -610,9 +610,9 @@ def main():
     ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
 
     obj_name = "earpod-case.stl"
-    num_sub_steps = 50
-    num_total_steps = 10
-    num_opt_steps = 10
+    num_sub_steps = 10
+    num_total_steps = 5_000
+    num_opt_steps = 100
     dt = 5e-5
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
 
