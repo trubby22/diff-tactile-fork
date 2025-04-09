@@ -152,7 +152,7 @@ class RL_Trainer:
 # Currently use contact_grasping_elastic as an example
 ##################################################################
 if __name__ == "__main__":
-    ti.init(arch=ti.cuda, device_memory_GB=12)
+    ti.init(arch=ti.cuda, device_memory_GB=9)
     # parse arguments for usage of sb-3 based ppo & sac training
     parser = argparse.ArgumentParser()
     parser.add_argument(

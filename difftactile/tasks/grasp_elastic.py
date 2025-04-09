@@ -643,7 +643,7 @@ def hasnan(vector):
             return False
 
 
-ti.init(arch=ti.gpu, device_memory_GB=4)
+ti.init(arch=ti.gpu, device_memory_GB=9)
 
 
 def main():

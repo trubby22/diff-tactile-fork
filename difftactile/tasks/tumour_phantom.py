@@ -409,11 +409,11 @@ class Contact:
 
 
 def main():
-    ti.init(arch=ti.gpu, device_memory_GB=9, debug=False, offline_cache=False)
-    obj_name = "earpod-case.stl"
+    ti.init(arch=ti.gpu, device_memory_GB=9, debug=True, offline_cache=False)
+    obj_name = "J03_2.obj"
     num_sub_steps = 10
-    num_total_steps = 5_000
-    num_opt_steps = 100
+    num_total_steps = 100
+    num_opt_steps = 5_000
     dt = 5e-5
     contact_model = Contact(
         use_tactile=USE_TACTILE,
