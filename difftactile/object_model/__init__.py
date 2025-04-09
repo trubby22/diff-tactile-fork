@@ -4,4 +4,4 @@ from .mpm_plastic import *
 from .multi_obj import *
 from .PBD_rope import *
 from .rigid_dynamic import *
-from .rigid_static import * 
+from .rigid_static import *

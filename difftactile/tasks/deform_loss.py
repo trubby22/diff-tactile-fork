@@ -1,12 +1,11 @@
 import taichi as ti
-import os
 import numpy as np
 from difftactile.object_model.mpm_plastic import MPMObj
 
 
 @ti.data_oriented
 class Deform_Loss:
-    def __init__(self, sim:MPMObj):
+    def __init__(self, sim: MPMObj):
         dtype = self.dtype = sim.dtype
         self.res = (sim.n_grid, sim.n_grid, sim.n_grid)
         self.n_grid = sim.n_grid
@@ -33,8 +32,6 @@ class Deform_Loss:
         self.cur_iou = ti.field(dtype=dtype, shape=())
         self.target_iou = ti.field(dtype=dtype, shape=())
 
-
-
     def load_target_density(self, grids=None):
         grids = grids.to_numpy()
         self.target_density.from_numpy(grids)
@@ -47,12 +44,11 @@ class Deform_Loss:
         self.sdf_weight[None] = 1.0
         self.density_weight[None] = 1.0
         self.cur_iou.fill(0)
-        self.load_target_density( grids)
+        self.load_target_density(grids)
 
     def set_weights(self, sdf, density):
         self.sdf_weight[None] = sdf
         self.density_weight[None] = density
-
 
     @ti.func
     def norm(self, x, eps=1e-8):
@@ -64,12 +60,16 @@ class Deform_Loss:
             self.target_sdf[I] = self.inf
             grid_pos = ti.cast(I * self.dx_0, self.dtype)
             if self.target_density[I] > 1e-4:
-                self.target_sdf[I] = 0.
+                self.target_sdf[I] = 0.0
                 self.nearest_point[I] = grid_pos
             else:
-                for offset in ti.grouped(ti.ndrange(*(((-3, 3),)*self.dim))):
+                for offset in ti.grouped(ti.ndrange(*(((-3, 3),) * self.dim))):
                     v = I + offset
-                    if v.min() >= 0 and v.max() < self.n_grid and ti.abs(offset).sum() != 0:
+                    if (
+                        v.min() >= 0
+                        and v.max() < self.n_grid
+                        and ti.abs(offset).sum() != 0
+                    ):
                         if self.target_sdf_copy[v] < self.inf:
                             nearest_point = self.nearest_point_copy[v]
                             dist = self.norm(grid_pos - nearest_point)
@@ -85,28 +85,26 @@ class Deform_Loss:
         for i in range(self.n_grid * 2):
             self.update_target_sdf()
 
-
     @ti.func
     def soft_weight(self, d):
-        return 1/(1+d*d*10000)
-
+        return 1 / (1 + d * d * 10000)
 
     @ti.kernel
     def compute_density_loss_kernel(self):
         for I in ti.grouped(self.grid_mass):
-            self.density_loss[None] += ti.abs(self.grid_mass[I] - self.target_density[I])
+            self.density_loss[None] += ti.abs(
+                self.grid_mass[I] - self.target_density[I]
+            )
 
     @ti.kernel
     def compute_sdf_loss_kernel(self):
         for I in ti.grouped(self.grid_mass):
             self.sdf_loss[None] += self.target_sdf[I] * self.grid_mass[I]
+
     @ti.kernel
     def sum_up_loss_kernel(self):
         self.loss[None] += self.density_loss[None] * self.density_weight[None]
         self.loss[None] += self.sdf_loss[None] * self.sdf_weight[None]
-
-
-
 
     @ti.kernel
     def clear_loss_grad(self):
@@ -117,8 +115,7 @@ class Deform_Loss:
         self.density_loss.grad[None] = 0
         self.sdf_loss.grad[None] = 0
 
-    def compute_loss_kernel(self, f:ti.i32):
-
+    def compute_loss_kernel(self, f: ti.i32):
         self.grid_mass.fill(0)
         self.compute_grid_mass(f)
 
@@ -128,33 +125,30 @@ class Deform_Loss:
 
     def compute_loss_kernel_grad(self, f):
         self.sum_up_loss_kernel.grad()
-        self.grid_mass.fill(0.)
-        self.grid_mass.grad.fill(0.)
-        self.compute_grid_mass(f) # get the grid mass tensor...
+        self.grid_mass.fill(0.0)
+        self.grid_mass.grad.fill(0.0)
+        self.compute_grid_mass(f)  # get the grid mass tensor...
         self.compute_sdf_loss_kernel.grad()
         self.compute_density_loss_kernel.grad()
-        self.compute_grid_mass.grad(f) # back to the particles..
+        self.compute_grid_mass.grad(f)  # back to the particles..
 
     @ti.kernel
     def iou(self):
-        ma = ti.cast(0., self.dtype)
-        mb = ti.cast(0., self.dtype)
-        I = ti.cast(0., self.dtype)
-        Ua = ti.cast(0., self.dtype)
-        Ub = ti.cast(0., self.dtype)
+        ma = ti.cast(0.0, self.dtype)
+        mb = ti.cast(0.0, self.dtype)
+        I = ti.cast(0.0, self.dtype)
+        Ua = ti.cast(0.0, self.dtype)
+        Ub = ti.cast(0.0, self.dtype)
         for i in ti.grouped(self.grid_mass):
             ti.atomic_max(ma, self.grid_mass[i])
             ti.atomic_max(mb, self.target_density[i])
-            I += self.grid_mass[i]  * self.target_density[i]
+            I += self.grid_mass[i] * self.target_density[i]
             Ua += self.grid_mass[i]
             Ub += self.target_density[i]
-        I = I/ma/mb
-        U = Ua/ma + Ub/mb
-        self.cur_iou[None] = I/(U- I)
-     
+        I = I / ma / mb
+        U = Ua / ma + Ub / mb
+        self.cur_iou[None] = I / (U - I)
 
     def iou2(self, a, b):
         I = np.sum(a * b)
         return I / (np.sum(a) + np.sum(b) - I)
-
-   

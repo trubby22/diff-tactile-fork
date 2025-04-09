@@ -1,22 +1,21 @@
-""" 
-    tactile_env.py
-    Implemented by Elgce August, 2023
-    TactileEnv class inherited from gym.Env
-    Wrap implemented Contact_models like Surface_follow
-    For use of stable-baselines3
 """
-import os
+tactile_env.py
+Implemented by Elgce August, 2023
+TactileEnv class inherited from gym.Env
+Wrap implemented Contact_models like Surface_follow
+For use of stable-baselines3
+"""
+
 import random
 import math
 import numpy as np
-import taichi as ti
 import gymnasium as gym
 from gymnasium import spaces
 from matplotlib import pyplot as plt
-from stable_baselines3.common.env_checker import check_env
+
 
 ##################################################################
-# implement TactileEnv, 
+# implement TactileEnv,
 # a wrapper of implemented taichi contact classes
 # for use of stable_baselines based DRL training
 ##################################################################
@@ -38,13 +37,39 @@ class TactileEnv(gym.Env):
         b. rewards:
     NOTE: this version, we use CNN (obs: images of tactile) as input
     """
-    def __init__(self, use_state, use_tactile, obs_tactile, contact, dt, total_steps, sub_steps, obj, time_limit, n_actions, n_observations, task_name=None):
+
+    def __init__(
+        self,
+        use_state,
+        use_tactile,
+        obs_tactile,
+        contact,
+        dt,
+        total_steps,
+        sub_steps,
+        obj,
+        time_limit,
+        n_actions,
+        n_observations,
+        task_name=None,
+    ):
         super().__init__()
         self.n_actions = n_actions
         self.n_observations = n_observations
-        self.action_space = spaces.Box(low=-0.015, high=0.015, shape=(n_actions,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=-1000, high=1000, shape=(n_observations,), dtype=np.float32)
-        self.contact_model = contact(use_state=use_state, use_tactile=use_tactile, dt=dt, total_steps=total_steps, sub_steps=sub_steps, obj=obj)
+        self.action_space = spaces.Box(
+            low=-0.015, high=0.015, shape=(n_actions,), dtype=np.float32
+        )
+        self.observation_space = spaces.Box(
+            low=-1000, high=1000, shape=(n_observations,), dtype=np.float32
+        )
+        self.contact_model = contact(
+            use_state=use_state,
+            use_tactile=use_tactile,
+            dt=dt,
+            total_steps=total_steps,
+            sub_steps=sub_steps,
+            obj=obj,
+        )
         self.contact_model.prepare_env()
         self.time_step = 0
         self.time_limit = time_limit
@@ -70,8 +95,7 @@ class TactileEnv(gym.Env):
         self.actions = []
         self.obs_tactile = obs_tactile
         self.reset()
-        
-    
+
     def step(self, action):
         """_summary_
         Args:
@@ -83,7 +107,7 @@ class TactileEnv(gym.Env):
             infos: []
         """
         self.time_step += 1
-        self.contact_model.apply_action(action, self.time_step)        
+        self.contact_model.apply_action(action, self.time_step)
         self.contact_model.calculate_force(self.time_step)
         obs = self.get_observations()
         rewards = self.compute_rewards(obs=obs)
@@ -95,12 +119,12 @@ class TactileEnv(gym.Env):
         self.actions.append(action)
         if truncated:
             if obs_nan:
-                obs = np.zeros_like(obs) # otherwise, will get error for nan X float
+                obs = np.zeros_like(obs)  # otherwise, will get error for nan X float
                 print("truncate at", self.time_step)
         else:
-            self.total_rewards+= rewards
+            self.total_rewards += rewards
         return obs, rewards, dones, truncated, infos
-    
+
     def reset(self, seed=None, options=None):
         """_summary_
         Args:
@@ -121,7 +145,7 @@ class TactileEnv(gym.Env):
         obs = self.get_observations()
         self.actions = []
         return obs, infos
-    
+
     def get_observations(self):
         """_summary_
         Returns:
@@ -131,47 +155,73 @@ class TactileEnv(gym.Env):
             sensor_matrix = self.contact_model.fem_sensor1.trans_h.to_numpy()
             sensor_matrix = np.matrix(sensor_matrix)
             trang, rot = self.extract_translation_and_euler_angles(sensor_matrix)
-            obs = self.contact_model.mpm_object.x_0.to_numpy()[0][self.index].reshape(-1) # 
-            obs = np.append(obs, np.array(trang)) # 3
-            obs = np.append(obs, np.array(rot)) # 3
+            obs = self.contact_model.mpm_object.x_0.to_numpy()[0][self.index].reshape(
+                -1
+            )  #
+            obs = np.append(obs, np.array(trang))  # 3
+            obs = np.append(obs, np.array(rot))  # 3
             if self.obs_tactile:
                 self.contact_model.fem_sensor1.extract_markers(0)
-                obs = np.append(obs, self.contact_model.fem_sensor1.predict_markers.to_numpy().reshape(-1))
+                obs = np.append(
+                    obs,
+                    self.contact_model.fem_sensor1.predict_markers.to_numpy().reshape(
+                        -1
+                    ),
+                )
                 obs = np.append(obs, self.contact_model.predict_force1[None].to_numpy())
         elif self.task_name == "surface_follow":
             sensor_matrix = self.contact_model.fem_sensor1.trans_h.to_numpy()
             sensor_matrix = np.matrix(sensor_matrix)
             trang, rot = self.extract_translation_and_euler_angles(sensor_matrix)
-            obs = np.array(trang) # 3
-            obs = np.append(obs, np.array(rot)) # 3
+            obs = np.array(trang)  # 3
+            obs = np.append(obs, np.array(rot))  # 3
             if self.obs_tactile:
                 self.contact_model.fem_sensor1.extract_markers(0)
-                obs = np.append(obs, self.contact_model.fem_sensor1.predict_markers.to_numpy().reshape(-1))
+                obs = np.append(
+                    obs,
+                    self.contact_model.fem_sensor1.predict_markers.to_numpy().reshape(
+                        -1
+                    ),
+                )
                 obs = np.append(obs, self.contact_model.predict_force[None].to_numpy())
         elif self.task_name == "cable_manip":
             sensor_matrix = self.contact_model.gripper.fem_sensor1.trans_h.to_numpy()
             sensor_matrix = np.matrix(sensor_matrix)
             trang, rot = self.extract_translation_and_euler_angles(sensor_matrix)
-            obs = self.contact_model.rope_object.pos.to_numpy()[0][self.index].reshape(-1) # 
-            obs = np.append(obs, np.array(trang)) # 3
-            obs = np.append(obs, np.array(rot)) # 3
+            obs = self.contact_model.rope_object.pos.to_numpy()[0][self.index].reshape(
+                -1
+            )  #
+            obs = np.append(obs, np.array(trang))  # 3
+            obs = np.append(obs, np.array(rot))  # 3
             if self.obs_tactile:
                 self.contact_model.gripper.fem_sensor1.extract_markers(0)
-                obs = np.append(obs, self.contact_model.gripper.fem_sensor1.predict_markers.to_numpy().reshape(-1))
+                obs = np.append(
+                    obs,
+                    self.contact_model.gripper.fem_sensor1.predict_markers.to_numpy().reshape(
+                        -1
+                    ),
+                )
                 obs = np.append(obs, self.contact_model.predict_force1[None].to_numpy())
         elif self.task_name == "repose_obj":
             sensor_matrix = self.contact_model.fem_sensor1.trans_h.to_numpy()
             sensor_matrix = np.matrix(sensor_matrix)
             trang, rot = self.extract_translation_and_euler_angles(sensor_matrix)
-            obs = self.contact_model.mpm_object.x_0.to_numpy()[0][self.index].reshape(-1) # 
-            obs = np.append(obs, np.array(trang)) # 3
-            obs = np.append(obs, np.array(rot)) # 3
+            obs = self.contact_model.mpm_object.x_0.to_numpy()[0][self.index].reshape(
+                -1
+            )  #
+            obs = np.append(obs, np.array(trang))  # 3
+            obs = np.append(obs, np.array(rot))  # 3
             if self.obs_tactile:
                 self.contact_model.fem_sensor1.extract_markers(0)
-                obs = np.append(obs, self.contact_model.fem_sensor1.predict_markers.to_numpy().reshape(-1))
+                obs = np.append(
+                    obs,
+                    self.contact_model.fem_sensor1.predict_markers.to_numpy().reshape(
+                        -1
+                    ),
+                )
                 obs = np.append(obs, self.contact_model.predict_force1[0].to_numpy())
         return obs
-    
+
     def extract_translation_and_euler_angles(self, matrix):
         translation = matrix[:3, 3]
         rotation_matrix = matrix[:3, :3]
@@ -192,7 +242,7 @@ class TactileEnv(gym.Env):
         z_deg = math.degrees(z)
 
         return translation, (x_deg, y_deg, z_deg)
-    
+
     def compute_rewards(self, obs):
         """_summary_
         Args:
@@ -216,28 +266,32 @@ class TactileEnv(gym.Env):
             raise NotImplementedError
         rewards = scale * 2000 - delta_loss
         return rewards
-    
+
     def check_termination(self):
         if self.time_step >= self.time_limit:
             return True
         # TODO: if need more terminate condition, add here
         return False
-    
+
     def render(self, gui1, gui2, gui3):
         # TODO: if needed, render env image here
         self.contact_model.render(gui1, gui2, gui3)
-    
+
     def close(self):
         pass
-    
+
     def render_rewards(self):
         """_summary_
-            according to self.rewards & self.iters, render rewards curve
+        according to self.rewards & self.iters, render rewards curve
         """
         plt.figure(figsize=(20, 12))
-        plt.plot(self.iters, self.rewards, marker='o')
-        plt.title("mean rewards for " + self.task_name) # NOTE: change titles to what you need
+        plt.plot(self.iters, self.rewards, marker="o")
+        plt.title(
+            "mean rewards for " + self.task_name
+        )  # NOTE: change titles to what you need
         plt.xlabel("training iter")
         plt.ylabel("total reward")
-        plt.savefig("checkpoints/" + self.task_name + "/" +"iter_reward.png")
+        plt.savefig("checkpoints/" + self.task_name + "/" + "iter_reward.png")
+
+
 ##################################################################
