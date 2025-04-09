@@ -13,6 +13,7 @@ enable_gui2 = True
 enable_gui3 = True
 
 
+
 @ti.data_oriented
 class Contact:
     def __init__(
