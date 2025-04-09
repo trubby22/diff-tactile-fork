@@ -59,7 +59,35 @@ class ObjLoader:
         Sample grid-like particles in a 3D cube space [-0.5, 0.5]
         '''
         dx = 1 / self.particle_density
-        x = np.linspace(-0.5, 0.5, self.particle_density+1)
+
+        # Define the original start and end for geomspace
+        original_start = 1
+        original_end = 100
+        num_samples = self.particle_density+1
+
+        # Generate the geomspace distribution
+        geometric_distribution = np.geomspace(original_start, original_end, num_samples)
+
+        # Define the desired new start and end
+        new_start = -0.5
+        new_end = 0.5
+
+        # Find the original range
+        original_range = original_end - original_start
+
+        # Find the desired new range
+        new_range = new_end - new_start
+
+        # Calculate the scaling factor
+        scale_factor = new_range / original_range
+
+        # Calculate the shift needed
+        shift = new_start - original_start * scale_factor
+
+        # Rescale the geometric distribution
+        x = geometric_distribution * scale_factor + shift
+
+        # x = np.linspace(-0.5, 0.5, self.particle_density+1)
         particles = np.stack(np.meshgrid(x, x, x, indexing='ij'), -1).reshape((-1, 3))
 
         return particles
