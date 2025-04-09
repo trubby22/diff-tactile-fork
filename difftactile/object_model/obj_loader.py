@@ -66,6 +66,7 @@ class ObjLoader:
         """
         dx = 1 / self.particle_density
 
+<<<<<<< HEAD
         use_non_uniform_mesh_distribution = False
 
         if use_non_uniform_mesh_distribution:
