@@ -1,6 +1,7 @@
 """
 a class to describe multi-material objects with mpm
 """
+from IPython import embed
 import os
 import taichi as ti
 import trimesh
