@@ -6,6 +6,7 @@ import os
 off_screen = False
 from difftactile.sensor_model.fem_sensor import FEMDomeSensor
 from difftactile.object_model.multi_obj import MultiObj
+from difftactile.object_model.mpm_elastic import MPMObj
 import argparse
 
 enable_gui1 = True
@@ -22,18 +23,19 @@ class Contact:
         self.total_steps = total_steps
         self.sub_steps = sub_steps
         self.fem_sensor1 = FEMDomeSensor(dt, sub_steps)
-        self.space_scale = 8.0
-        self.obj_scale = 6.0
         self.use_tactile = use_tactile
         self.use_state = use_state
-        self.mpm_object = MultiObj(
+        self.space_scale = 10.0
+        self.obj_scale = 2.0
+        self.dim = 3
+        self.mpm_object = MPMObj(
             dt=dt,
             sub_steps=sub_steps,
             obj_name=obj,
             space_scale=self.space_scale,
             obj_scale=self.obj_scale,
             density=1.5,
-            rho=0.2,
+            rho=6.0,
         )
         self.alpha = ti.field(float, ())
         self.beta = ti.field(float, ())
@@ -124,18 +126,18 @@ class Contact:
         self.collision(f)
         self.mpm_object.grid_op(f)
         self.mpm_object.g2p(f)
-        self.mpm_object.compute_COM(f)
-        self.mpm_object.compute_H(f)
-        self.mpm_object.compute_H_svd(f)
-        self.mpm_object.compute_R(f)
+        # self.mpm_object.compute_COM(f)
+        # self.mpm_object.compute_H(f)
+        # self.mpm_object.compute_H_svd(f)
+        # self.mpm_object.compute_R(f)
         self.fem_sensor1.update2(f)
 
     def update_grad(self, f):
         self.fem_sensor1.update2.grad(f)
-        self.mpm_object.compute_R.grad(f)
-        self.mpm_object.compute_H_svd_grad(f)
-        self.mpm_object.compute_H.grad(f)
-        self.mpm_object.compute_COM.grad(f)
+        # self.mpm_object.compute_R.grad(f)
+        # self.mpm_object.compute_H_svd_grad(f)
+        # self.mpm_object.compute_H.grad(f)
+        # self.mpm_object.compute_COM.grad(f)
         self.mpm_object.g2p.grad(f)
         self.mpm_object.grid_op.grad(f)
         self.clamp_grid(f)
@@ -461,7 +463,7 @@ def main():
                 contact_model.compute_force_loss()
                 print("contact force: ", contact_model.predict_force1[None])
                 print("force loss", contact_model.loss[None] - form_loss)
-            if USE_STATE:
+            if False and USE_STATE:
                 contact_model.compute_angle(ts)
                 print("angle", contact_model.angle[ts])
             viz_scale = 0.15
@@ -505,7 +507,7 @@ def main():
                 form_loss = contact_model.loss[None]
                 contact_model.compute_force_loss()
                 print("force loss", contact_model.loss[None] - form_loss)
-            if USE_STATE:
+            if False and USE_STATE:
                 form_loss = contact_model.loss[None]
                 contact_model.compute_angle_loss(ts + 1)
                 print("angle loss", contact_model.loss[None] - form_loss)
