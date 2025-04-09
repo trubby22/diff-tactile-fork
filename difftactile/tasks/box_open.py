@@ -557,7 +557,7 @@ def transform_2d(point, angle, translate):
 
 
 def main():
-    ti.init(arch=ti.gpu, device_memory_GB=9)
+    ti.init(arch=ti.gpu, device_memory_GB=9, debug=True)
 
     obj_name = "earpod-case.stl"
     num_sub_steps = 10

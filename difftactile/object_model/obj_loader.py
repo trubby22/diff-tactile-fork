@@ -60,6 +60,7 @@ class ObjLoader:
         '''
         dx = 1 / self.particle_density
 
+<<<<<<< HEAD
         use_non_uniform_mesh_distribution = False
 
         if use_non_uniform_mesh_distribution:
@@ -100,5 +101,37 @@ class ObjLoader:
             x = np.linspace(-0.5, 0.5, self.particle_density+1)
             particles = np.stack(np.meshgrid(x, x, x, indexing='ij'), -1).reshape((-1, 3))
         print("Particle range:", particles.min(axis=0), particles.max(axis=0))
+=======
+        # # Define the original start and end for geomspace
+        # original_start = 1
+        # original_end = 100
+        # num_samples = self.particle_density+1
+
+        # # Generate the geomspace distribution
+        # geometric_distribution = np.geomspace(original_start, original_end, num_samples, dtype=np.float32)
+
+        # # Define the desired new start and end
+        # new_start = -0.5
+        # new_end = 0.5
+
+        # # Find the original range
+        # original_range = original_end - original_start
+
+        # # Find the desired new range
+        # new_range = new_end - new_start
+
+        # # Calculate the scaling factor
+        # scale_factor = new_range / original_range
+
+        # # Calculate the shift needed
+        # shift = new_start - original_start * scale_factor
+
+        # # Rescale the geometric distribution
+        # x = geometric_distribution * scale_factor + shift
+
+        y = np.linspace(-0.5, 0.5, self.particle_density+1, dtype=np.float32)
+        # assert x.shape == y.shape
+        particles = np.stack(np.meshgrid(y, y, y, indexing='ij'), -1).reshape((-1, 3))
+>>>>>>> 9e23c34 (debug non-uniform mesh)
 
         return particles
