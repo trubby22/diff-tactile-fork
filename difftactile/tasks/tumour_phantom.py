@@ -14,6 +14,7 @@ enable_gui3 = True
 
 
 
+
 @ti.data_oriented
 class Contact:
     def __init__(
