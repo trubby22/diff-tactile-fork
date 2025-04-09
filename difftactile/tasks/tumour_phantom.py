@@ -87,22 +87,22 @@ class Contact:
         self.angle_z = ti.field(float, ())
 
     def init(self):
-        self.obj_pos = [4.9, 3.00, 5.0]
-        self.obj_ori = [0.0, 90.0, 0.0]
-        self.obj_vel = [0.0, 0.0, 0.0]
-        self.mpm_object.init(self.obj_pos, self.obj_ori, self.obj_vel)
-        rx1 = 0.0
+        self.phantom_pos = [3.0, 3.0, 3.0]
+        self.phantom_ori = [0.0, 0.0, 0.0]
+        self.phantom_vel = [0.0, 0.0, 0.0]
+        self.mpm_object.init(self.phantom_pos, self.phantom_ori, self.phantom_vel)
+        rx1 = 180.0
         ry1 = 0.0
-        rz1 = 90.0
-        t_dx1 = 8.75
-        t_dy1 = 4.5
-        t_dz1 = 5.0
+        rz1 = 0.0
+        t_dx1 = 3.0
+        t_dy1 = 3.0 + 2.2
+        t_dz1 = 3.0
         self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
 
     @ti.kernel
     def init_pos_control(self):
         vx1 = 0.0
-        vy1 = 0.0
+        vy1 = 20.0
         vz1 = 0.0
         rx1 = 0.0
         ry1 = 0.0
@@ -412,10 +412,10 @@ class Contact:
 
 def main():
     ti.init(arch=ti.gpu, device_memory_GB=9, debug=True, offline_cache=False)
-    obj_name = "J03_2.obj"
+    phantom_name = "J03_2.obj"
     num_sub_steps = 10
-    num_total_steps = 100
-    num_opt_steps = 5_000
+    num_total_steps = 1_000_000
+    num_opt_steps = 1_000_000
     dt = 5e-5
     contact_model = Contact(
         use_tactile=USE_TACTILE,
@@ -423,7 +423,7 @@ def main():
         dt=dt,
         total_steps=num_total_steps,
         sub_steps=num_sub_steps,
-        obj=obj_name,
+        obj=phantom_name,
     )
     if not off_screen:
         if enable_gui1:
@@ -466,8 +466,8 @@ def main():
             if False and USE_STATE:
                 contact_model.compute_angle(ts)
                 print("angle", contact_model.angle[ts])
-            viz_scale = 0.15
-            viz_offset = [-0.2, 0.0]
+            viz_scale = 0.05
+            viz_offset = [0.0, 0.0]
             if not off_screen:
                 contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
