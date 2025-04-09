@@ -111,6 +111,6 @@ class ObjLoader:
             particles = np.stack(np.meshgrid(x, x, x, indexing="ij"), -1).reshape(
                 (-1, 3)
             )
-        print("Particle range:", particles.min(axis=0), particles.max(axis=0))
+        # print("Particle range:", particles.min(axis=0), particles.max(axis=0))
 
         return particles

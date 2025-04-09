@@ -409,7 +409,7 @@ class Contact:
 
 
 def main():
-    ti.init(arch=ti.gpu, device_memory_GB=9, debug=True)
+    ti.init(arch=ti.gpu, device_memory_GB=9, debug=False, offline_cache=False)
     obj_name = "earpod-case.stl"
     num_sub_steps = 10
     num_total_steps = 5_000
