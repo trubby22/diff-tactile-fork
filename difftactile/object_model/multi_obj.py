@@ -33,7 +33,6 @@ class MultiObj:
         self.init_vel = ti.Vector.field(3, dtype=ti.f32, shape=())
         self.rot_h = ti.Matrix.field(3, 3, ti.f32, shape=())
         self.trans_h = ti.Matrix.field(4, 4, ti.f32, shape=())
-
         self.bound = 3
         self.dim = 3
         self.n_grid = 64
@@ -42,10 +41,8 @@ class MultiObj:
         self.rho = rho * self.obj_scale
         self.particle_density = self.n_grid * density * obj_scale / space_scale
         self.gravity = ti.Vector([0.0, -200, 0.0])
-
         self.border_line = np.array([-0.42, 0.42]) * self.obj_scale
 
-        ## parameters for object
         self.obj_name = obj_name
         if self.obj_name is not None:
             data_path = os.path.join("..", "meshes", "objects", self.obj_name)
@@ -62,7 +59,6 @@ class MultiObj:
             print("Object model is loaded!")
         else:
             print("ERR on loading object model")
-
         height_limit = np.max(obj_loader.particles[:, 1])
         self.border_line = (
             np.array(
@@ -73,17 +69,15 @@ class MultiObj:
             )
             * self.obj_scale
         )
-
         self.dx_0 = float(self.space_scale / self.n_grid)
         self.inv_dx_0 = 1 / self.dx_0
         self.p_vol, self.p_rho = (
             (self.dx_0 * self.obj_scale) ** 3,
             self.rho * 1.0,
-        )  # g/m^3
+        )
         self.p_mass = self.p_vol * self.p_rho
         self.eps = 1e-5
         self.damping = 35.0
-
         self.E_0 = ti.field(dtype=ti.f32, shape=(3,), needs_grad=True)
         self.nu_0 = ti.field(dtype=ti.f32, shape=(3,), needs_grad=True)
         self.lamda_0 = ti.field(dtype=ti.f32, shape=(3,), needs_grad=True)
@@ -93,7 +87,7 @@ class MultiObj:
         self.E_0[0], self.nu_0[0] = (
             4e5 * self.space_scale,
             0.4,
-        )  # 0 for lower, 1 for middle, 2 for upper
+        )
         for item in range(3):
             self.mu_0[item] = self.E_0[item] / 2 / (1 + self.nu_0[item])
             self.lamda_0[item] = (
@@ -102,23 +96,21 @@ class MultiObj:
                 / (1 + self.nu_0[item])
                 / (1 - 2 * self.nu_0[item])
             )
-
         self.x_0 = ti.Vector.field(
             3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True
-        )  # position
+        )
         self.v_0 = ti.Vector.field(
             3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True
-        )  # velocity
-
+        )
         self.C_0 = ti.Matrix.field(
             3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True
-        )  # affine velocity field
+        )
         self.F_new = ti.Matrix.field(
             3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True
         )
         self.F_0 = ti.Matrix.field(
             3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True
-        )  # deformation gradient
+        )
         self.U_svd = ti.Matrix.field(
             3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True
         )
@@ -128,35 +120,33 @@ class MultiObj:
         self.S_svd = ti.Matrix.field(
             3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True
         )
-
         self.grid_v_in = ti.Vector.field(
             3,
             dtype=float,
             shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid),
             needs_grad=True,
-        )  # grid node momentum/velocity
+        )
         self.grid_v_out = ti.Vector.field(
             3,
             dtype=float,
             shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid),
             needs_grad=True,
-        )  # grid node momentum/velocity
+        )
         self.grid_m = ti.field(
             dtype=float,
             shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid),
             needs_grad=True,
-        )  # grid node mass
+        )
         self.grid_f = ti.Vector.field(
             3,
             dtype=float,
             shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid),
             needs_grad=True,
-        )  # grid node external force
+        )
         self.grid_occupy = ti.field(
             dtype=int, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid)
         )
         self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad=True)
-
         self.COM_t0 = ti.Vector.field(
             3, dtype=float, shape=(self.sub_steps), needs_grad=True
         )
@@ -178,17 +168,17 @@ class MultiObj:
         self.V = ti.Matrix.field(
             3, 3, dtype=float, shape=(self.sub_steps), needs_grad=True
         )
-        self.cache = dict()  # for grad backward
+        self.cache = dict()
 
     @ti.kernel
     def preprocess_obj(self):
         for item in range(self.n_particles):
             if self.particles[item][1] < self.border_line[0]:
-                self.titles[item] = 0  # 0 means lower part
+                self.titles[item] = 0
             elif self.particles[item][1] < self.border_line[1]:
-                self.titles[item] = 1  # 1 means middle part
+                self.titles[item] = 1
             else:
-                self.titles[item] = 2  # 2 means upper part
+                self.titles[item] = 2
 
     def init(self, pos, ori, vel):
         self.preprocess_obj()
@@ -199,7 +189,6 @@ class MultiObj:
         self.init_pos[None] = position
         self.init_ori[None] = orientation
         self.init_vel[None] = velocity
-
         rot = R.from_rotvec(
             np.deg2rad([orientation[0], orientation[1], orientation[2]])
         )
@@ -218,7 +207,7 @@ class MultiObj:
             before_t_pos = self.particles[i]
             after_t_pos = self.trans_h[None] @ ti.Vector(
                 [before_t_pos[0], before_t_pos[1], before_t_pos[2], 1.0]
-            )  # 4 x 1 homogeneous
+            )
             self.x_0[0, i] = ti.Vector([after_t_pos[0], after_t_pos[1], after_t_pos[2]])
             self.v_0[0, i] = ti.Matrix(
                 [self.init_vel[None][0], self.init_vel[None][1], self.init_vel[None][2]]
@@ -282,7 +271,6 @@ class MultiObj:
         vt = self.V_svd[f, p].transpose()
         ut = self.U_svd[f, p].transpose()
         s_term = self.U_svd[f, p] @ self.S_svd.grad[f, p] @ vt
-
         s = ti.Vector.zero(ti.f32, 3)
         s = (
             ti.Vector(
@@ -330,7 +318,6 @@ class MultiObj:
         vt = self.V[f].transpose()
         ut = self.U[f].transpose()
         s_term = self.U[f] @ self.S.grad[f] @ vt
-
         s = ti.Vector.zero(ti.f32, 3)
         s = ti.Vector([self.S[f][0, 0], self.S[f][1, 1], self.S[f][2, 2]]) ** 2
         ff = ti.Matrix.zero(ti.f32, 3, 3)
@@ -362,22 +349,18 @@ class MultiObj:
             mu, lamda = self.mu_0[self.titles[p]], self.lamda_0[self.titles[p]]
             base = (self.x_0[f, p] * self.inv_dx_0 - 0.5).cast(int)
             fx = self.x_0[f, p] * self.inv_dx_0 - base.cast(float)
-            # Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
-            w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
 
+            w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
             J = (self.S_svd[f, p]).determinant()
             r = self.U_svd[f, p] @ self.V_svd[f, p].transpose()
             cauchy = 2 * mu * (self.F_new[f, p] - r) @ self.F_new[
                 f, p
             ].transpose() + ti.Matrix.identity(float, 3) * lamda * J * (J - 1)
-
             stress = (
                 -self.dt * self.p_vol * 4 * self.inv_dx_0 * self.inv_dx_0
             ) * cauchy
-
             affine = stress + self.p_mass * self.C_0[f, p]
 
-            # Loop over 3x3 grid node neighborhood
             for i, j, k in ti.static(ti.ndrange(3, 3, 3)):
                 offset = ti.Vector([i, j, k])
                 dpos = (offset.cast(float) - fx) * self.dx_0
@@ -386,7 +369,6 @@ class MultiObj:
                     self.p_mass * self.v_0[f, p] + affine @ dpos
                 )
                 self.grid_m[f, base + offset] += weight * self.p_mass
-
             self.F_0[f + 1, p] = self.F_new[f, p]
 
     @ti.kernel
@@ -400,47 +382,41 @@ class MultiObj:
         for i, j, k in ti.ndrange(self.n_grid, self.n_grid, self.n_grid):
             if self.grid_occupy[f, i, j, k] == 1:
                 inv_m = 1 / (self.grid_m[f, i, j, k] + self.eps)
-
                 v_out = ti.Vector([0.0, 0.0, 0.0])
-                v_out += inv_m * self.grid_v_in[f, i, j, k]  # Momentum to velocity
+                v_out += inv_m * self.grid_v_in[f, i, j, k]
                 v_out += inv_m * self.grid_f[f, i, j, k]
-                v_out += self.dt * self.gravity  # gravity
-
+                v_out += self.dt * self.gravity
                 if i < self.bound and v_out[0] < 0:
-                    v_out[0] = 0  # Boundary conditions
+                    v_out[0] = 0
                 if i > self.n_grid - self.bound and v_out[0] > 0:
                     v_out[0] = 0
-                if j < self.bound and v_out[1] < 0:  # < 3
+                if j < self.bound and v_out[1] < 0:
                     v_out[1] = 0
                 if j > self.n_grid - self.bound and v_out[1] > 0:
                     v_out[1] = 0
-                if k < self.bound and v_out[2] < 0:  # < 3
+                if k < self.bound and v_out[2] < 0:
                     v_out[2] = 0
                 if k > self.n_grid - self.bound and v_out[2] > 0:
                     v_out[2] = 0
-
                 self.grid_v_out[f, i, j, k] = v_out
 
     @ti.kernel
     def g2p(self, f: ti.i32):
-        for p in range(self.n_particles):  # grid to particle (G2P)
+        for p in range(self.n_particles):
             base = (self.x_0[f, p] * self.inv_dx_0 - 0.5).cast(int)
             fx = self.x_0[f, p] * self.inv_dx_0 - base.cast(float)
             w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2]
             new_v = ti.Vector.zero(float, 3)
             new_C = ti.Matrix.zero(float, 3, 3)
             for i, j, k in ti.static(ti.ndrange(3, 3, 3)):
-                # loop over 3x3 grid node neighborhood
                 dpos = ti.Vector([i, j, k]).cast(float) - fx
                 g_v = self.grid_v_out[f, base + ti.Vector([i, j, k])]
                 weight = w[i][0] * w[j][1] * w[k][2]
                 new_v += weight * g_v
                 new_C += 4 * self.inv_dx_0 * weight * g_v.outer_product(dpos)
-
             self.v_0[f + 1, p], self.C_0[f + 1, p] = new_v, new_C
-            self.x_0[f + 1, p] = self.x_0[f, p] + self.dt * new_v  # advection
+            self.x_0[f + 1, p] = self.x_0[f, p] + self.dt * new_v
 
-    # Add rigidy
     @ti.kernel
     def compute_COM(self, f: ti.i32):
         for p in range(self.n_particles):
@@ -523,7 +499,6 @@ class MultiObj:
             for i in ti.static(range(self.dim)):
                 self.x_0[f, p][i] = cache_x_0[p, i]
                 self.v_0[f, p][i] = cache_v_0[p, i]
-
             for i, j in ti.ndrange(self.dim, self.dim):
                 self.C_0[f, p][i, j] = cache_C_0[p, i, j]
                 self.F_0[f, p][i, j] = cache_F_0[p, i, j]
@@ -541,7 +516,6 @@ class MultiObj:
             for i in ti.static(range(self.dim)):
                 cache_x_0[p, i] = self.x_0[f, p][i]
                 cache_v_0[p, i] = self.v_0[f, p][i]
-
             for i, j in ti.ndrange(self.dim, self.dim):
                 cache_C_0[p, i, j] = self.C_0[f, p][i, j]
                 cache_F_0[p, i, j] = self.F_0[f, p][i, j]
@@ -550,7 +524,6 @@ class MultiObj:
         cur_step_name = f"{t:06d}"
         device = "cpu"
         self.cache[cur_step_name] = dict()
-
         self.cache[cur_step_name]["x_0"] = torch.zeros(
             (self.n_particles, self.dim), dtype=TC_TYPE, device=device
         )
@@ -563,7 +536,6 @@ class MultiObj:
         self.cache[cur_step_name]["F_0"] = torch.zeros(
             (self.n_particles, self.dim, self.dim), dtype=TC_TYPE, device=device
         )
-
         self.add_step_to_cache(
             0,
             self.cache[cur_step_name]["x_0"],
@@ -579,7 +551,6 @@ class MultiObj:
         self.copy_frame(0, self.sub_steps - 1)
         self.copy_grad(0, self.sub_steps - 1)
         self.clear_step_grad(self.sub_steps - 1)
-
         self.load_step_from_cache(
             0,
             self.cache[cur_step_name]["x_0"],
@@ -611,7 +582,6 @@ class MultiObj:
                 self.v_0.grad[t, p].fill(0.0)
                 self.C_0.grad[t, p].fill(0.0)
                 self.F_0.grad[t, p].fill(0.0)
-
         for t in range(f):
             self.COM_t0.grad[t].fill(0.0)
             self.COM_t1.grad[t].fill(0.0)
