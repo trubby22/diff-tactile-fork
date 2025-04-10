@@ -32,6 +32,8 @@ class Contact:
         self.total_steps = total_steps
         self.sub_steps = sub_steps
         self.dim = 3
+        self.p_rad = 0.25
+        self.table_height = 0.0
         self.fem_sensor1 = FEMDomeSensor(dt, sub_steps)
         self.space_scale = 10.0
         self.obj_scale = 6.0
@@ -55,6 +57,8 @@ class Contact:
 
         self.view_phi = 0
         self.view_theta = 0
+        self.view_scale = 10.0
+        self.table_scale = 2.0
         self.kn = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kd = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kt = ti.field(dtype=float, shape=(), needs_grad=True)
@@ -95,6 +99,7 @@ class Contact:
 
         self.draw_pos2 = ti.Vector.field(2, float, self.fem_sensor1.n_verts) # elastomer1's pos
         self.draw_pos3 = ti.Vector.field(2, float, self.mpm_object.n_particles) # object's particle
+        self.draw_tableline = ti.Vector.field(3, dtype=float, shape=(2*4))
 
         # 3d viz
         self.draw_pos_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_particles))
@@ -489,26 +494,31 @@ class Contact:
         # gui.triangles(np.array([a[:,0],a[:,2]]).T, np.array([b[:,0],b[:,2]]).T, np.array([c[:,0],c[:,2]]).T, color=ti.rgb_to_hex([k + gb, gb, gb]))
         gui.triangles(viz_scale*np.array([ua,va]).T + viz_offset, viz_scale*np.array([ub,vb]).T + viz_offset, viz_scale*np.array([uc,vc]).T + viz_offset, color=ti.rgb_to_hex([k + gb, gb, gb]))
 
+    def draw_table(self):
+
+        c1 = ti.Vector([-self.table_scale, self.table_height, -self.table_scale])
+        c2 = ti.Vector([-self.table_scale, self.table_height, self.table_scale])
+        c3 = ti.Vector([self.table_scale, self.table_height, self.table_scale])
+        c4 = ti.Vector([self.table_scale, self.table_height, -self.table_scale])
+        self.draw_tableline[0] = c1; self.draw_tableline[1] = c2
+        self.draw_tableline[2] = c2; self.draw_tableline[3] = c3
+        self.draw_tableline[4] = c3; self.draw_tableline[5] = c4
+        self.draw_tableline[6] = c4; self.draw_tableline[7] = c1
+
+    @ti.kernel
+    def draw_3d_scene(self, f:ti.i32):
+        # for p in range(self.mpm_object.n_particles):
+        #     self.draw_pos_3d[p] = self.mpm_object.x_0[f, p] / self.view_scale
+
+        for p in range(self.fem_sensor1.num_surface):
+            idx = self.fem_sensor1.surface_id[p]
+            self.draw_fem1_3d[p] = self.fem_sensor1.pos[f, idx] / self.view_scale
+            self.color_fem1_3d[p] = ti.Vector([0.9, 0.7, 0.8]) + 2.0*(self.fem_sensor1.pos[f, idx] - self.fem_sensor1.virtual_pos[f, idx])
+
     def calculate_force(self):
         self.fem_sensor1.get_external_force(self.fem_sensor1.sub_steps - 2)
         self.mpm_object.get_external_force(self.mpm_object.sub_steps - 2)
         self.compute_contact_force(self.sub_steps - 2)
-
-    def render(self, gui1, gui2, gui3):
-        viz_scale = 0.1
-        viz_offset = [0.0, 0.0]
-        self.fem_sensor1.extract_markers(0)
-        init_2d = self.fem_sensor1.virtual_markers.to_numpy()
-        marker_2d = self.fem_sensor1.predict_markers.to_numpy()
-        self.draw_markers(init_2d, marker_2d, gui2)
-        self.draw_perspective(0)
-        gui1.circles(viz_scale * self.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
-        gui1.circles(viz_scale * self.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-        # gui1.circles(viz_scale * self.draw_pos4.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-        self.draw_triangles(self.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
-        gui1.show()
-        gui2.show()
-        gui3.show()
 
     def apply_action(self, action, ts):
         if ts < self.total_steps // 4:
@@ -552,6 +562,21 @@ def transform_2d(point, angle, translate):
 
 def main():
     ti.init(arch=ti.gpu, device_memory_GB=4)
+    if not off_screen:
+
+        window = ti.ui.Window("Box opening" , (int(1920 * 0.9), int(1080 * 0.9)))
+        canvas = window.get_canvas()
+        canvas.set_background_color((0, 0, 0))
+        scene = ti.ui.Scene()
+        camera = ti.ui.Camera()
+        camera.projection_mode(ti.ui.ProjectionMode.Perspective)
+        camera.position(10, 10, 10)
+        camera.up(0, 1, 0)
+        camera.lookat(0, 0, 0)
+        camera.fov(90)
+        gui1 = ti.GUI("Contact Viz")
+        gui2 = ti.GUI("Force Map 1")
+        gui3 = ti.GUI("Deformation Map 1")
 
     obj_name = "earpod-case.stl"
     num_sub_steps = 50
@@ -560,12 +585,9 @@ def main():
     dt = 5e-5
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
 
-    if not off_screen:
-        gui1 = ti.GUI("Contact Viz")
-        gui2 = ti.GUI("Force Map 1")
-        gui3 = ti.GUI("Deformation Map 1")
 
     losses = []
+    contact_model.draw_table()
     contact_model.init_pos_control()
     contact_model.load_target()
 
@@ -621,6 +643,7 @@ def main():
             ### the external force is not propogate to the last time step but the second last
             # contact_model.draw_external_force(contact_model.fem_sensor1.sub_steps-2)
             if not off_screen:
+
                 contact_model.draw_perspective(0)
                 gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
                 gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
@@ -629,6 +652,18 @@ def main():
                 gui1.show()
                 gui2.show()
                 gui3.show()
+
+                camera.track_user_inputs(window, movement_speed=0.2, hold_key=ti.ui.RMB)
+                scene.set_camera(camera)
+                scene.ambient_light((0.8, 0.8, 0.8))
+                scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
+
+                contact_model.draw_3d_scene(0)
+                # scene.particles(contact_model.draw_pos_3d, color = (0.68, 0.26, 0.19), radius = 1.0)
+                scene.particles(contact_model.draw_fem1_3d, per_vertex_color = contact_model.color_fem1_3d, radius = 5.0)
+                # scene.lines(contact_model.draw_tableline, color = (0.28, 0.68, 0.99), width = 2.0)
+                canvas.scene(scene)
+                window.show()
 
         ## backward!
         loss_frame = 0
@@ -692,23 +727,6 @@ def main():
                 contact_model.reset()
                 for ss in range(num_sub_steps - 1):
                     contact_model.update(ss)
-
-            if not off_screen:
-                contact_model.fem_sensor1.extract_markers(0)
-                init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
-                marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
-                contact_model.draw_markers(init_2d, marker_2d, gui2)
-
-                contact_model.draw_perspective(0)
-                gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
-                gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-                contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
-                # contact_model.draw_deformation(scene, camera, window)
-
-
-                gui1.show()
-                gui2.show()
-                gui3.show()
 
         losses.append(loss_frame)
 
