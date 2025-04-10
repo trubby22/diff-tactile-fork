@@ -129,12 +129,22 @@ class Contact:
     @ti.kernel
     def init_pos_control(self):
         vx1 = 0.0
-        vy1 = 1.0
+        vy1 = 2.0
         vz1 = 0.0
         rx1 = 0.0
         ry1 = 0.0
         rz1 = 0.0
-        for i in range(0, self.total_steps):
+        for i in range(0, 200):
+            self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
+            self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
+        
+        vx1 = 2.0
+        vy1 = 0.0
+        vz1 = 0.0
+        rx1 = 0.0
+        ry1 = 0.0
+        rz1 = 0.0
+        for i in range(200, self.total_steps):
             self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
