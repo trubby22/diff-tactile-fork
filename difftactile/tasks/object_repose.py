@@ -562,7 +562,7 @@ def transform_2d(point, angle, translate):
 
 
 def main():
-    ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
+    ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
 
     obj_name = "block-10.stl"
     num_sub_steps = 50

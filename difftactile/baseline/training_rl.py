@@ -123,7 +123,7 @@ class RL_Trainer():
 # Currently use contact_grasping_elastic as an example
 ##################################################################
 if __name__ == "__main__":
-    ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
+    ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
     # parse arguments for usage of sb-3 based ppo & sac training
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_train_envs", type=int, default=4,    help="num of envs to train policy")
