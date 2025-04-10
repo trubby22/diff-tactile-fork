@@ -24,7 +24,7 @@ class FEMDomeSensor:
         self.N_node = int(200 / 64) # number of nodes in the most inner layer
         self.N_t = 4 # thickness
         self.t_res = 0.25
-        self.inner_radius = 0.75# 7.5 mm radius
+        self.inner_radius = 0.75 / 4 # 7.5 mm radius
 
         self.all_nodes, self.all_f2v, self.surface_f2v, self.layer_idxs = self.init_mesh()
         self.n_verts = len(self.all_nodes)

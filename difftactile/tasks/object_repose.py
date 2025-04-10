@@ -17,6 +17,7 @@ import trimesh
 
 from difftactile.sensor_model.fem_sensor import FEMDomeSensor
 from difftactile.object_model.rigid_dynamic import RigidObj
+from difftactile.object_model.mpm_elastic import MPMObj
 
 import argparse
 
@@ -41,7 +42,7 @@ class Contact:
         self.use_state = use_state
         self.use_tactile = use_tactile
 
-        self.mpm_object = RigidObj(dt=dt, 
+        self.mpm_object = MPMObj(dt=dt, 
                       sub_steps=sub_steps,
                       obj_name=obj, 
                       space_scale = self.space_scale, 
@@ -129,6 +130,7 @@ class Contact:
 
     def init(self):
         move_x = -1.0
+        thickness_offset = -0.75 * 3 / 4
 
         self.ball_pos = [3.2 + move_x, 1.0, 5.0]
         self.ball_ori = [0.0, 0.0, 90.0]
@@ -147,7 +149,7 @@ class Contact:
         rx1 = 0.0
         ry1 = 0.0
         rz1 = 90.0
-        t_dx1 = 7.0 + move_x #7.95
+        t_dx1 = 7.0 + move_x + thickness_offset #7.95
         t_dy1 = 1.5
         t_dz1 = 5.0
 
@@ -172,23 +174,27 @@ class Contact:
     @ti.kernel
     def init_pos_control(self):
 
+        sf = 1.0
+        prepare_steps = int(self.prepare_step / sf)
+        total_steps = int(self.total_steps / sf)
+
         # initial position for sensor 1 & 2
 
         #Pressing 
-        vx1 = 0.0; vy1 = 1.5; vz1 = 0.0
+        vx1 = 0.0; vy1 = 1.5 * sf; vz1 = 0.0
 
         rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
 
-        for i in range(0, self.prepare_step):
+        for i in range(0, prepare_steps):
 
             self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
-        vx1 = 1.0; vy1 = 0.5; vz1 = 0.0
+        vx1 = 1.0 * sf; vy1 = 0.5 * sf; vz1 = 0.0
 
         rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
 
-        for i in range(self.prepare_step, self.total_steps):
+        for i in range(prepare_steps, total_steps):
             self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
@@ -213,19 +219,19 @@ class Contact:
         self.collision(f)
         self.mpm_object.grid_op(f)
         self.mpm_object.g2p(f)
-        self.mpm_object.compute_COM(f)
-        self.mpm_object.compute_H(f)
-        self.mpm_object.compute_H_svd(f)
-        self.mpm_object.compute_R(f)
+        # self.mpm_object.compute_COM(f)
+        # self.mpm_object.compute_H(f)
+        # self.mpm_object.compute_H_svd(f)
+        # self.mpm_object.compute_R(f)
         self.fem_sensor1.update2(f)
 
 
     def update_grad(self, f):
         self.fem_sensor1.update2.grad(f)
-        self.mpm_object.compute_R.grad(f)
-        self.mpm_object.compute_H_svd_grad(f)
-        self.mpm_object.compute_H.grad(f)
-        self.mpm_object.compute_COM.grad(f)
+        # self.mpm_object.compute_R.grad(f)
+        # self.mpm_object.compute_H_svd_grad(f)
+        # self.mpm_object.compute_H.grad(f)
+        # self.mpm_object.compute_COM.grad(f)
         self.mpm_object.g2p.grad(f)
         self.mpm_object.grid_op.grad(f)
         self.clamp_grid(f)
@@ -424,6 +430,7 @@ class Contact:
 
     @ti.kernel
     def compute_angle(self, t: ti.i32):
+        return
         
         for f in range(self.sub_steps -1 ):
             if f == 0:
