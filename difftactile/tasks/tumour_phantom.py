@@ -27,6 +27,8 @@ class Contact:
         self.space_scale = 10.0
         self.obj_scale = 1.0
         self.dim = 3
+        self.p_rad = 0.25
+        self.table_height = 0.0
         self.mpm_object = MPMObj(
             dt=dt,
             sub_steps=sub_steps,
@@ -44,6 +46,8 @@ class Contact:
         self.init()
         self.view_phi = 0
         self.view_theta = 0
+        self.view_scale = 10.0
+        self.table_scale = 2.0
         self.kn = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kd = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kt = ti.field(dtype=float, shape=(), needs_grad=True)
@@ -78,6 +82,13 @@ class Contact:
         self.contact_force1 = ti.Vector.field(self.dim, float, (), needs_grad=True)
         self.draw_pos2 = ti.Vector.field(2, float, self.fem_sensor1.n_verts)
         self.draw_pos3 = ti.Vector.field(2, float, self.mpm_object.n_particles)
+        self.draw_tableline = ti.Vector.field(3, dtype=float, shape=(2*4))
+        self.draw_pos_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_particles))
+        self.draw_fem1_3d = ti.Vector.field(3, dtype=float, shape=(self.fem_sensor1.n_verts))
+        self.contact_grid = ti.field(dtype=int, shape=(self.mpm_object.n_grid, self.mpm_object.n_grid, self.mpm_object.n_grid))
+        self.draw_grid_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_grid**3))
+        self.color_grid_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_grid**3))
+        self.color_fem1_3d = ti.Vector.field(3, dtype=float, shape=(self.fem_sensor1.n_verts))
         self.norm_eps = 1e-11
         self.target_force1 = ti.Vector.field(self.dim, float, shape=())
         self.target_angle = ti.field(float, ())
@@ -408,9 +419,53 @@ class Contact:
             color=ti.rgb_to_hex([k + gb, gb, gb]),
         )
 
+    def draw_table(self):
+
+        c1 = ti.Vector([-self.table_scale, self.table_height, -self.table_scale])
+        c2 = ti.Vector([-self.table_scale, self.table_height, self.table_scale])
+        c3 = ti.Vector([self.table_scale, self.table_height, self.table_scale])
+        c4 = ti.Vector([self.table_scale, self.table_height, -self.table_scale])
+        self.draw_tableline[0] = c1; self.draw_tableline[1] = c2
+        self.draw_tableline[2] = c2; self.draw_tableline[3] = c3
+        self.draw_tableline[4] = c3; self.draw_tableline[5] = c4
+        self.draw_tableline[6] = c4; self.draw_tableline[7] = c1
+
+    @ti.kernel
+    def draw_3d_scene(self, f:ti.i32):
+        for p in range(self.mpm_object.n_particles):
+            self.draw_pos_3d[p] = self.mpm_object.x_0[f, p] / self.view_scale
+
+        for p in range(self.fem_sensor1.num_surface):
+            idx = self.fem_sensor1.surface_id[p]
+            self.draw_fem1_3d[p] = self.fem_sensor1.pos[f, idx] / self.view_scale
+            self.color_fem1_3d[p] = ti.Vector([0.9, 0.7, 0.8]) + 2.0*(self.fem_sensor1.pos[f, idx] - self.fem_sensor1.virtual_pos[f, idx])
+
 
 def main():
     ti.init(arch=ti.gpu, device_memory_GB=9, debug=True, offline_cache=False)
+    if not off_screen:
+        window = ti.ui.Window("Tumour palpation" , (int(1920 * 0.9), int(1080 * 0.9)))
+        canvas = window.get_canvas()
+        canvas.set_background_color((0, 0, 0))
+        scene = ti.ui.Scene()
+        camera = ti.ui.Camera()
+        camera.projection_mode(ti.ui.ProjectionMode.Perspective)
+        camera.position(10, 10, 10)
+        camera.up(0, 1, 0)
+        camera.lookat(0, 0, 0)
+        camera.fov(90)
+        if enable_gui1:
+            gui1 = ti.GUI("Contact Viz")
+        else:
+            gui1 = None
+        if enable_gui2:
+            gui2 = ti.GUI("Force Map 1")
+        else:
+            gui2 = None
+        if enable_gui3:
+            gui3 = ti.GUI("Deformation Map 1")
+        else:
+            gui3 = None
     phantom_name = "J03_2.obj"
     num_sub_steps = 10
     num_total_steps = 1_000_000
@@ -424,20 +479,8 @@ def main():
         sub_steps=num_sub_steps,
         obj=phantom_name,
     )
-    if not off_screen:
-        if enable_gui1:
-            gui1 = ti.GUI("Contact Viz")
-        else:
-            gui1 = None
-        if enable_gui2:
-            gui2 = ti.GUI("Force Map 1")
-        else:
-            gui2 = None
-        if enable_gui3:
-            gui3 = ti.GUI("Deformation Map 1")
-        else:
-            gui3 = None
     losses = []
+    contact_model.draw_table()
     contact_model.init_pos_control()
     contact_model.load_target()
     form_loss = 0
@@ -507,6 +550,16 @@ def main():
                     gui2.show()
                 if enable_gui3:
                     gui3.show()
+                camera.track_user_inputs(window, movement_speed=0.2, hold_key=ti.ui.RMB)
+                scene.set_camera(camera)
+                scene.ambient_light((0.8, 0.8, 0.8))
+                scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
+                contact_model.draw_3d_scene(0)
+                scene.particles(contact_model.draw_pos_3d, color = (0.68, 0.26, 0.19), radius = 5.0)
+                scene.particles(contact_model.draw_fem1_3d, per_vertex_color = contact_model.color_fem1_3d, radius = 5.0)
+                # scene.lines(contact_model.draw_tableline, color = (0.28, 0.68, 0.99), width = 2.0)
+                canvas.scene(scene)
+                window.show()
         loss_frame = 0
         form_loss = 0
         for ts in range(num_total_steps - 2, -1, -1):
@@ -555,40 +608,6 @@ def main():
                 contact_model.reset()
                 for ss in range(num_sub_steps - 1):
                     contact_model.update(ss)
-            if not off_screen:
-                contact_model.fem_sensor1.extract_markers(0)
-                init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
-                marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
-                if enable_gui2:
-                    contact_model.draw_markers(init_2d, marker_2d, gui2)
-                contact_model.draw_perspective(0)
-                if enable_gui1:
-                    gui1.circles(
-                        viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset,
-                        radius=2,
-                        color=0x039DFC,
-                    )
-                    gui1.circles(
-                        viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset,
-                        radius=2,
-                        color=0xE6C949,
-                    )
-                if enable_gui3:
-                    contact_model.draw_triangles(
-                        contact_model.fem_sensor1,
-                        gui3,
-                        f_deformation,
-                        r1_deformation,
-                        r2_deformation,
-                        viz_scale_deformation_map,
-                        viz_offset_deformation_map,
-                    )
-                if enable_gui1:
-                    gui1.show()
-                if enable_gui2:
-                    gui2.show()
-                if enable_gui3:
-                    gui3.show()
         losses.append(loss_frame)
         if not os.path.exists(
             f"lr_box_open_state_{args.use_state}_tactile_{args.use_tactile}"
