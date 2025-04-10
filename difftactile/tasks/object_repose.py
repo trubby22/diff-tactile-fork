@@ -748,10 +748,6 @@ def main():
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
                 marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
                 contact_model.draw_markers(init_2d, marker_2d, gui2)
-
-            ### the external force is not propogate to the last time step but the second last
-            # contact_model.draw_external_force(contact_model.fem_sensor1.sub_steps-2)
-            if not off_screen:
                 contact_model.draw_perspective(0)
                 gui1.circles(
                     viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset,
