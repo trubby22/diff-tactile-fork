@@ -495,7 +495,7 @@ class Contact:
 
 
 def main():
-    ti.init(arch=ti.gpu, device_memory_GB=9, debug=True, offline_cache=False)
+    ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
     if not off_screen:
         window = ti.ui.Window("Tumour palpation", (int(1920 * 0.9), int(1080 * 0.9)))
         canvas = window.get_canvas()
