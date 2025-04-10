@@ -10,8 +10,8 @@ from difftactile.object_model.mpm_elastic import MPMObj
 import argparse
 
 enable_gui1 = True
-enable_gui2 = False
-enable_gui3 = False
+enable_gui2 = True
+enable_gui3 = True
 
 
 @ti.data_oriented
@@ -26,7 +26,7 @@ class Contact:
         self.use_tactile = use_tactile
         self.use_state = use_state
         self.space_scale = 10.0
-        self.obj_scale = 2.0
+        self.obj_scale = 1.0
         self.dim = 3
         self.mpm_object = MPMObj(
             dt=dt,
@@ -34,7 +34,7 @@ class Contact:
             obj_name=obj,
             space_scale=self.space_scale,
             obj_scale=self.obj_scale,
-            density=1.5,
+            density=4.0,
             rho=6.0,
         )
         self.alpha = ti.field(float, ())
@@ -95,14 +95,14 @@ class Contact:
         ry1 = 0.0
         rz1 = 0.0
         t_dx1 = 3.0
-        t_dy1 = 3.0 + 2.2
+        t_dy1 = 3.0 + 1.55
         t_dz1 = 3.0
         self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
 
     @ti.kernel
     def init_pos_control(self):
         vx1 = 0.0
-        vy1 = 20.0
+        vy1 = 1.0
         vz1 = 0.0
         rx1 = 0.0
         ry1 = 0.0
@@ -466,8 +466,8 @@ def main():
             if False and USE_STATE:
                 contact_model.compute_angle(ts)
                 print("angle", contact_model.angle[ts])
-            viz_scale = 0.05
-            viz_offset = [0.0, 0.0]
+            viz_scale = 0.25
+            viz_offset = [-0.25, -0.5]
             if not off_screen:
                 contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
