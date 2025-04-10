@@ -486,7 +486,7 @@ def hasnan(vector):
         else:
             return False
 
-ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
+ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
 
 
 def main():
