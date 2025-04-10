@@ -122,7 +122,7 @@ class Contact:
         ry1 = 0.0
         rz1 = 0.0
         t_dx1 = 3.0
-        t_dy1 = 3.0 + 1.3
+        t_dy1 = 3.0 + self.fem_sensor1.outer_radius + 0.575
         t_dz1 = 3.0
         self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
 
