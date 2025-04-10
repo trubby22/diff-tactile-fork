@@ -211,7 +211,7 @@ class CMA_Trainer:
 # training with CMA_Trainer
 ##################################################################
 if __name__ == "__main__":
-    ti.init(arch=ti.cuda, device_memory_GB=9)
+    ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--use_state", action="store_true", help="whether to use state loss"
