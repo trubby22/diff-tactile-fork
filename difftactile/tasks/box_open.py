@@ -507,8 +507,8 @@ class Contact:
 
     @ti.kernel
     def draw_3d_scene(self, f:ti.i32):
-        # for p in range(self.mpm_object.n_particles):
-        #     self.draw_pos_3d[p] = self.mpm_object.x_0[f, p] / self.view_scale
+        for p in range(self.mpm_object.n_particles):
+            self.draw_pos_3d[p] = self.mpm_object.x_0[f, p] / self.view_scale
 
         for p in range(self.fem_sensor1.num_surface):
             idx = self.fem_sensor1.surface_id[p]
@@ -573,7 +573,7 @@ def main():
         camera.position(10, 10, 10)
         camera.up(0, 1, 0)
         camera.lookat(0, 0, 0)
-        camera.fov(90)
+        camera.fov(5)
         gui1 = ti.GUI("Contact Viz")
         gui2 = ti.GUI("Force Map 1")
         gui3 = ti.GUI("Deformation Map 1")
@@ -659,8 +659,8 @@ def main():
                 scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
 
                 contact_model.draw_3d_scene(0)
-                # scene.particles(contact_model.draw_pos_3d, color = (0.68, 0.26, 0.19), radius = 1.0)
-                scene.particles(contact_model.draw_fem1_3d, per_vertex_color = contact_model.color_fem1_3d, radius = 5.0)
+                scene.particles(contact_model.draw_pos_3d, color = (0.68, 0.26, 0.19), radius = 0.01)
+                # scene.particles(contact_model.draw_fem1_3d, per_vertex_color = contact_model.color_fem1_3d, radius = 1.0)
                 # scene.lines(contact_model.draw_tableline, color = (0.28, 0.68, 0.99), width = 2.0)
                 canvas.scene(scene)
                 window.show()
