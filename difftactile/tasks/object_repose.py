@@ -21,15 +21,15 @@ from difftactile.object_model.mpm_elastic import MPMObj
 
 import argparse
 
-TI_TYPE = ti.f32
-NP_TYPE = np.float32
+# TI_TYPE = ti.f32
+# NP_TYPE = np.float32
 
 
 
 @ti.data_oriented
 class Contact:
     def __init__(self, use_state, use_tactile, dt=5e-5, total_steps=300, sub_steps=50,obj=None):
-        self.iter = 0
+        # self.iter = 0
         
         self.dt = dt
         self.total_steps = total_steps
@@ -73,7 +73,7 @@ class Contact:
         self.fem_sensor1.set_material_params(E, nu)
 
         self.contact_idx = ti.Vector.field(self.num_sensor, dtype=int, shape=(self.sub_steps, self.mpm_object.n_grid, self.mpm_object.n_grid, self.mpm_object.n_grid)) # indicating the contact seg idx of fem sensor for closested triangle mesh
-        self.total_ext_f = ti.Vector.field(3, dtype=float, shape=())
+        # self.total_ext_f = ti.Vector.field(3, dtype=float, shape=())
 
         # control parameters
         self.dim = 3
@@ -96,21 +96,21 @@ class Contact:
        
 
         # visualization
-        self.surf_offset1 = ti.Vector.field(2, float, self.fem_sensor1.num_triangles)
-        self.surf_init_pos1 = ti.Vector.field(2, float, self.fem_sensor1.num_triangles)
-        self.press_offset1 = ti.field(float, self.fem_sensor1.num_triangles)
+        # self.surf_offset1 = ti.Vector.field(2, float, self.fem_sensor1.num_triangles)
+        # self.surf_init_pos1 = ti.Vector.field(2, float, self.fem_sensor1.num_triangles)
+        # self.press_offset1 = ti.field(float, self.fem_sensor1.num_triangles)
 
         self.draw_pos2 = ti.Vector.field(2, float, self.fem_sensor1.n_verts) # elastomer1's pos
         self.draw_pos3 = ti.Vector.field(2, float, self.mpm_object.n_particles) # object's particle
 
         # 3d viz 
-        self.draw_pos_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_particles))
-        self.draw_fem1_3d = ti.Vector.field(3, dtype=float, shape=(self.fem_sensor1.n_verts))
+        # self.draw_pos_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_particles))
+        # self.draw_fem1_3d = ti.Vector.field(3, dtype=float, shape=(self.fem_sensor1.n_verts))
 
-        self.contact_grid = ti.field(dtype=int, shape=(self.mpm_object.n_grid, self.mpm_object.n_grid, self.mpm_object.n_grid))
-        self.draw_grid_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_grid**3))
-        self.color_grid_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_grid**3))
-        self.color_fem1_3d = ti.Vector.field(3, dtype=float, shape=(self.fem_sensor1.n_verts))
+        # self.contact_grid = ti.field(dtype=int, shape=(self.mpm_object.n_grid, self.mpm_object.n_grid, self.mpm_object.n_grid))
+        # self.draw_grid_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_grid**3))
+        # self.color_grid_3d = ti.Vector.field(3, dtype=float, shape=(self.mpm_object.n_grid**3))
+        # self.color_fem1_3d = ti.Vector.field(3, dtype=float, shape=(self.fem_sensor1.n_verts))
 
         
 
@@ -119,7 +119,7 @@ class Contact:
         self.target_force1 = ti.Vector.field(self.dim, float, shape=(self.total_steps))
         self.target_angle = ti.field(float, ())
 
-        self.wf = 1e-6
+        # self.wf = 1e-6
 
     
 
@@ -138,12 +138,12 @@ class Contact:
         self.mpm_object.init(self.ball_pos, self.ball_ori, self.ball_vel)
 
         ### extract the height of the obj
-        obj_pos = self.mpm_object.x_0.to_numpy()[0,:]
-        sensor_pos = self.fem_sensor1.init_x.to_numpy()
+        # obj_pos = self.mpm_object.x_0.to_numpy()[0,:]
+        # sensor_pos = self.fem_sensor1.init_x.to_numpy()
 
-        self.obj_x = np.max(obj_pos[:,0]) - np.min(obj_pos[:,0])
-        self.obj_y = np.max(obj_pos[:,1]) - np.min(obj_pos[:,1])
-        self.obj_z = np.max(obj_pos[:,2]) - np.min(obj_pos[:,2])
+        # self.obj_x = np.max(obj_pos[:,0]) - np.min(obj_pos[:,0])
+        # self.obj_y = np.max(obj_pos[:,1]) - np.min(obj_pos[:,1])
+        # self.obj_z = np.max(obj_pos[:,2]) - np.min(obj_pos[:,2])
 
 
         rx1 = 0.0
@@ -156,20 +156,20 @@ class Contact:
         self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
 
 
-        self.in_contact = False
-        self.contact_timestamp = 0
+        # self.in_contact = False
+        # self.contact_timestamp = 0
 
-    def load_pos_control(self):
+    # def load_pos_control(self):
 
 
-        cur_pos_1 = np.load("control_pos_best.npy")
-        cur_ori_1 = np.load("control_ori_best.npy")
-        for i in range(len(cur_pos_1)):
-            if np.isnan(cur_pos_1[i]).any() or np.isnan(cur_ori_1[i]).any():
-                cur_pos_1[i] = cur_pos_1[i-1]
-                cur_ori_1[i] = cur_ori_1[i-1]
-        self.p_sensor1.from_numpy(cur_pos_1)
-        self.o_sensor1.from_numpy(cur_ori_1)
+    #     cur_pos_1 = np.load("control_pos_best.npy")
+    #     cur_ori_1 = np.load("control_ori_best.npy")
+    #     for i in range(len(cur_pos_1)):
+    #         if np.isnan(cur_pos_1[i]).any() or np.isnan(cur_ori_1[i]).any():
+    #             cur_pos_1[i] = cur_pos_1[i-1]
+    #             cur_ori_1[i] = cur_ori_1[i-1]
+    #     self.p_sensor1.from_numpy(cur_pos_1)
+    #     self.o_sensor1.from_numpy(cur_ori_1)
 
     @ti.kernel
     def init_pos_control(self):
@@ -362,7 +362,7 @@ class Contact:
                 min_idx1 = self.contact_idx[f, i, j, k]
                 cur_sdf1, cur_norm_v1, cur_relative_v1, contact_flag1 = self.fem_sensor1.find_sdf(cur_p, cur_v, min_idx1, f)
                 if contact_flag1:
-                    ext_v1, ext_n1, ext_t1 = self.calculate_contact_force(cur_sdf1, -1*cur_norm_v1, -1*cur_relative_v1)
+                    ext_v1, _, _ = self.calculate_contact_force(cur_sdf1, -1*cur_norm_v1, -1*cur_relative_v1)
                     self.mpm_object.update_contact_force(ext_v1, f, i, j, k)
                     self.fem_sensor1.update_contact_force(min_idx1, -1*ext_v1, f)
 
@@ -376,28 +376,28 @@ class Contact:
         self.fem_sensor1.memory_from_cache(t)
         self.mpm_object.memory_from_cache(t)
 
-    @ti.kernel
-    def draw_external_force(self, f:ti.i32):
-        inv_rot_h1 = self.fem_sensor1.rot_h[None].inverse()
-        inv_trans_h1 = self.fem_sensor1.inv_trans_h[None]
-        half_seg = self.fem_sensor1.num_triangles #//2
-        for i in range(half_seg):
-            f_1 = self.fem_sensor1.external_force_field[f, self.fem_sensor1.contact_seg[i][0]]
-            i_1 = self.fem_sensor1.virtual_pos[f, self.fem_sensor1.contact_seg[i][0]]
-            ti_1 = inv_trans_h1 @ ti.Vector([i_1[0], i_1[1], i_1[2], 1.0])
-            tf_1 = inv_rot_h1 @ f_1
+    # @ti.kernel
+    # def draw_external_force(self, f:ti.i32):
+    #     inv_rot_h1 = self.fem_sensor1.rot_h[None].inverse()
+    #     inv_trans_h1 = self.fem_sensor1.inv_trans_h[None]
+    #     half_seg = self.fem_sensor1.num_triangles #//2
+    #     for i in range(half_seg):
+    #         f_1 = self.fem_sensor1.external_force_field[f, self.fem_sensor1.contact_seg[i][0]]
+    #         i_1 = self.fem_sensor1.virtual_pos[f, self.fem_sensor1.contact_seg[i][0]]
+    #         ti_1 = inv_trans_h1 @ ti.Vector([i_1[0], i_1[1], i_1[2], 1.0])
+    #         tf_1 = inv_rot_h1 @ f_1
 
-            self.surf_offset1[i][0] = -1*tf_1[0] * 0.01 #* 0.01
-            self.surf_offset1[i][1] = -1*tf_1[2] * 0.01 #* 0.01
-            self.surf_init_pos1[i][0] = ti_1[0] + 0.5
-            self.surf_init_pos1[i][1] = ti_1[2] + 0.5
+    #         self.surf_offset1[i][0] = -1*tf_1[0] * 0.01 #* 0.01
+    #         self.surf_offset1[i][1] = -1*tf_1[2] * 0.01 #* 0.01
+    #         self.surf_init_pos1[i][0] = ti_1[0] + 0.5
+    #         self.surf_init_pos1[i][1] = ti_1[2] + 0.5
 
     def draw_markers(self, init_markers, cur_markers, gui):
         img_height = 480
         img_width = 640
         scale = img_width
         rescale = 1.8
-        draw_points = rescale * (init_markers - [320, 240]) / scale + [0.5, 0.5]
+        draw_points = rescale * (init_markers - [int(img_width / 2.0), int(img_height / 2.0)]) / scale + [0.5, 0.5]
         offset = rescale * (cur_markers - init_markers) / scale
         if not off_screen:
             gui.circles(draw_points, radius=2, color=0xf542a1)
@@ -405,38 +405,38 @@ class Contact:
         
 
 
-    def draw_markers_cv(self, tracked_markers, init_markers, showScale):
-        img = np.zeros((480, 640, 3))
-        markerCenter=np.around(init_markers[:,0:2]).astype(np.int16)
-        for i in range(init_markers.shape[0]):
-            marker_motion = tracked_markers[i] - init_markers[i]
-            cv2.arrowedLine(img,(markerCenter[i,0], markerCenter[i,1]), \
-                (int(init_markers[i,0]+marker_motion[0]*showScale), int(init_markers[i,1]+marker_motion[1]*showScale)),\
-                (0, 255, 255),2)
-        return img
+    # def draw_markers_cv(self, tracked_markers, init_markers, showScale):
+    #     img = np.zeros((480, 640, 3))
+    #     markerCenter=np.around(init_markers[:,0:2]).astype(np.int16)
+    #     for i in range(init_markers.shape[0]):
+    #         marker_motion = tracked_markers[i] - init_markers[i]
+    #         cv2.arrowedLine(img,(markerCenter[i,0], markerCenter[i,1]), \
+    #             (int(init_markers[i,0]+marker_motion[0]*showScale), int(init_markers[i,1]+marker_motion[1]*showScale)),\
+    #             (0, 255, 255),2)
+    #     return img
 
-    def apply_action(self, action, ts):
-        d_pos1, d_ori1, d_pos2, d_ori2 = np.split(action, 4)
-        self.fem_sensor1.d_pos.from_numpy(d_pos1)
-        self.fem_sensor1.d_ori.from_numpy(d_ori1)
-        self.fem_sensor1.set_pose_control()
-        self.fem_sensor1.set_control_vel(0)
-        self.fem_sensor1.set_vel(0)
-        self.reset()
-        for ss in range(self.sub_steps - 1):
-            self.update(ss)
+    # def apply_action(self, action, ts):
+    #     d_pos1, d_ori1, d_pos2, d_ori2 = np.split(action, 4)
+    #     self.fem_sensor1.d_pos.from_numpy(d_pos1)
+    #     self.fem_sensor1.d_ori.from_numpy(d_ori1)
+    #     self.fem_sensor1.set_pose_control()
+    #     self.fem_sensor1.set_control_vel(0)
+    #     self.fem_sensor1.set_vel(0)
+    #     self.reset()
+    #     for ss in range(self.sub_steps - 1):
+    #         self.update(ss)
 
-        self.memory_to_cache(ts)
+    #     self.memory_to_cache(ts)
 
     @ti.kernel
     def compute_angle(self, t: ti.i32):
         return
         
-        for f in range(self.sub_steps -1 ):
-            if f == 0:
-                self.angle[t+1] = self.angle[t] + ti.atan2(self.mpm_object.R[f][1,0], self.mpm_object.R[f][1,1])
-            else:
-                self.angle[t+1] += ti.atan2(self.mpm_object.R[f][1,0], self.mpm_object.R[f][1,1])
+        # for f in range(self.sub_steps -1 ):
+        #     if f == 0:
+        #         self.angle[t+1] = self.angle[t] + ti.atan2(self.mpm_object.R[f][1,0], self.mpm_object.R[f][1,1])
+        #     else:
+        #         self.angle[t+1] += ti.atan2(self.mpm_object.R[f][1,0], self.mpm_object.R[f][1,1])
 
 
     @ti.kernel
@@ -444,21 +444,21 @@ class Contact:
         self.loss[None] += self.alpha[None] * (self.angle[t] - self.target_angle[None])* (self.angle[t] - self.target_angle[None])
     
     
-    @ti.kernel
-    def draw_surface(self, f:ti.i32):
-        inv_trans_h1 = self.fem_sensor1.inv_trans_h[None]
-        half_seg = self.fem_sensor1.num_triangles #//2
-        for i in range(half_seg):
-            p_1 = self.fem_sensor1.pos[f, self.fem_sensor1.contact_seg[i][0]] # triangle's 1st node
-            i_1 = self.fem_sensor1.init_x[self.fem_sensor1.contact_seg[i][0]]
-            tp_1 = inv_trans_h1 @ ti.Vector([p_1[0], p_1[1], p_1[2], 1.0])
+    # @ti.kernel
+    # def draw_surface(self, f:ti.i32):
+    #     inv_trans_h1 = self.fem_sensor1.inv_trans_h[None]
+    #     half_seg = self.fem_sensor1.num_triangles #//2
+    #     for i in range(half_seg):
+    #         p_1 = self.fem_sensor1.pos[f, self.fem_sensor1.contact_seg[i][0]] # triangle's 1st node
+    #         i_1 = self.fem_sensor1.init_x[self.fem_sensor1.contact_seg[i][0]]
+    #         tp_1 = inv_trans_h1 @ ti.Vector([p_1[0], p_1[1], p_1[2], 1.0])
 
 
-            self.surf_offset1[i][0] = 2*(tp_1[0] - i_1[0])
-            self.surf_offset1[i][1] = 2*(tp_1[2] - i_1[2])
-            self.press_offset1[i] = tp_1[1] - i_1[1]
-            self.surf_init_pos1[i][0] = i_1[0] + 0.5
-            self.surf_init_pos1[i][1] = i_1[2] + 0.5
+    #         self.surf_offset1[i][0] = 2*(tp_1[0] - i_1[0])
+    #         self.surf_offset1[i][1] = 2*(tp_1[2] - i_1[2])
+    #         self.press_offset1[i] = tp_1[1] - i_1[1]
+    #         self.surf_init_pos1[i][0] = i_1[0] + 0.5
+    #         self.surf_init_pos1[i][1] = i_1[2] + 0.5
 
     @ti.kernel
     def draw_perspective(self, f:ti.i32):
@@ -480,94 +480,94 @@ class Contact:
             self.draw_pos3[i][0] = u + 0.2
             self.draw_pos3[i][1] = v + 0.5
 
-    def draw_triangles(self, sensor, gui, f, tphi, ttheta, viz_scale, viz_offset):
-        inv_trans_h = sensor.inv_trans_h[None]
-        pos_ = sensor.pos.to_numpy()[f,:]
-        init_pos_ = sensor.virtual_pos.to_numpy()[f,:]
-        ones = np.ones((pos_.shape[0],1))
+    # def draw_triangles(self, sensor, gui, f, tphi, ttheta, viz_scale, viz_offset):
+    #     inv_trans_h = sensor.inv_trans_h[None]
+    #     pos_ = sensor.pos.to_numpy()[f,:]
+    #     init_pos_ = sensor.virtual_pos.to_numpy()[f,:]
+    #     ones = np.ones((pos_.shape[0],1))
 
-        hom_pos_ = np.hstack((pos_, ones)) # N x 4
-        c_pos_ = np.matmul(inv_trans_h,hom_pos_.T).T[:,0:3] # Nx3
+    #     hom_pos_ = np.hstack((pos_, ones)) # N x 4
+    #     c_pos_ = np.matmul(inv_trans_h,hom_pos_.T).T[:,0:3] # Nx3
 
-        hom_pos_ = np.hstack((init_pos_, ones)) # N x 4
-        v_pos_ = np.matmul(inv_trans_h,hom_pos_.T).T[:,0:3] # Nx3
+    #     hom_pos_ = np.hstack((init_pos_, ones)) # N x 4
+    #     v_pos_ = np.matmul(inv_trans_h,hom_pos_.T).T[:,0:3] # Nx3
 
-        phi, theta = np.radians(tphi), np.radians(ttheta) # 28 20
-        c_p, s_p = np.cos(phi), np.sin(phi)
-        c_t, s_t = np.cos(theta), np.sin(theta)
+    #     phi, theta = np.radians(tphi), np.radians(ttheta) # 28 20
+    #     c_p, s_p = np.cos(phi), np.sin(phi)
+    #     c_t, s_t = np.cos(theta), np.sin(theta)
 
-        c_seg_ = sensor.contact_seg.to_numpy()
-        offset = 0.0
+    #     c_seg_ = sensor.contact_seg.to_numpy()
+    #     offset = 0.0
 
-        a, b, c = pos_[c_seg_[:, 0]], pos_[c_seg_[:, 1]], pos_[c_seg_[:, 2]]
-        x = a[:,0]; y = a[:,1]; z = a[:,2]
-        xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
-        ua, va = xx + 0.2, y * c_t + zz * s_t + 0.5
+    #     a, b, c = pos_[c_seg_[:, 0]], pos_[c_seg_[:, 1]], pos_[c_seg_[:, 2]]
+    #     x = a[:,0]; y = a[:,1]; z = a[:,2]
+    #     xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+    #     ua, va = xx + 0.2, y * c_t + zz * s_t + 0.5
 
-        x = b[:,0]; y = b[:,1]; z = b[:,2]
-        xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
-        ub, vb = xx + 0.2, y * c_t + zz * s_t + 0.5
+    #     x = b[:,0]; y = b[:,1]; z = b[:,2]
+    #     xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+    #     ub, vb = xx + 0.2, y * c_t + zz * s_t + 0.5
 
-        x = c[:,0]; y = c[:,1]; z = c[:,2]
-        xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
-        uc, vc = xx + 0.2, y * c_t + zz * s_t + 0.5
+    #     x = c[:,0]; y = c[:,1]; z = c[:,2]
+    #     xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+    #     uc, vc = xx + 0.2, y * c_t + zz * s_t + 0.5
 
-        pa, pb, pc = c_pos_[c_seg_[:, 0]], c_pos_[c_seg_[:, 1]], c_pos_[c_seg_[:, 2]]
-        ba, bb, bc = v_pos_[c_seg_[:, 0]], v_pos_[c_seg_[:, 1]], v_pos_[c_seg_[:, 2]]
-        oa, ob, oc = pa[:, 1] - ba[:, 1], pb[:, 1] - bb[:, 1], pc[:, 1] - bc[:, 1]
+    #     pa, pb, pc = c_pos_[c_seg_[:, 0]], c_pos_[c_seg_[:, 1]], c_pos_[c_seg_[:, 2]]
+    #     ba, bb, bc = v_pos_[c_seg_[:, 0]], v_pos_[c_seg_[:, 1]], v_pos_[c_seg_[:, 2]]
+    #     oa, ob, oc = pa[:, 1] - ba[:, 1], pb[:, 1] - bb[:, 1], pc[:, 1] - bc[:, 1]
 
-        k = -1 * (oa + ob + oc) * (1 / 3) * 1.0 # z deformation
-        gb = 0.5
-        # gui.triangles(np.array([a[:,0],a[:,2]]).T, np.array([b[:,0],b[:,2]]).T, np.array([c[:,0],c[:,2]]).T, color=ti.rgb_to_hex([k + gb, gb, gb]))
-        gui.triangles(viz_scale*np.array([ua,va]).T + viz_offset, viz_scale*np.array([ub,vb]).T + viz_offset, viz_scale*np.array([uc,vc]).T + viz_offset, color=ti.rgb_to_hex([k + gb, gb, gb]))
+    #     k = -1 * (oa + ob + oc) * (1 / 3) * 1.0 # z deformation
+    #     gb = 0.5
+    #     # gui.triangles(np.array([a[:,0],a[:,2]]).T, np.array([b[:,0],b[:,2]]).T, np.array([c[:,0],c[:,2]]).T, color=ti.rgb_to_hex([k + gb, gb, gb]))
+    #     gui.triangles(viz_scale*np.array([ua,va]).T + viz_offset, viz_scale*np.array([ub,vb]).T + viz_offset, viz_scale*np.array([uc,vc]).T + viz_offset, color=ti.rgb_to_hex([k + gb, gb, gb]))
 
-    def calculate_force(self):
-        self.fem_sensor1.get_external_force(self.fem_sensor1.sub_steps - 2)
-        self.mpm_object.get_external_force(self.mpm_object.sub_steps - 2)
-        self.compute_contact_force(self.sub_steps - 2)
+    # def calculate_force(self):
+    #     self.fem_sensor1.get_external_force(self.fem_sensor1.sub_steps - 2)
+    #     self.mpm_object.get_external_force(self.mpm_object.sub_steps - 2)
+    #     self.compute_contact_force(self.sub_steps - 2)
     
-    def prepare_env(self):
-        self.init_pos_control()
-        self.load_target()
+    # def prepare_env(self):
+    #     self.init_pos_control()
+    #     self.load_target()
     
-    def apply_action(self, action, ts):
-        if ts < self.prepare_step:
-            d_pos = np.array([action[0], action[1] + 1.5, action[2]])
-            d_ori = np.array([action[3], action[4], action[5]])
-        else:
-            d_pos = np.array([action[0] + 1.0, action[1] + 0.5, action[2]])
-            d_ori = np.array([action[3], action[4], action[5]])
-        # print(action)
-        self.fem_sensor1.d_pos.from_numpy(d_pos)
-        self.fem_sensor1.d_ori.from_numpy(d_ori)
-        self.fem_sensor1.set_pose_control()
-        self.fem_sensor1.set_control_vel(0)
-        self.fem_sensor1.set_vel(0)
-        self.reset()
-        for ss in range(self.sub_steps - 1):
-            self.update(ss)
-        self.memory_to_cache(ts)
+    # def apply_action(self, action, ts):
+    #     if ts < self.prepare_step:
+    #         d_pos = np.array([action[0], action[1] + 1.5, action[2]])
+    #         d_ori = np.array([action[3], action[4], action[5]])
+    #     else:
+    #         d_pos = np.array([action[0] + 1.0, action[1] + 0.5, action[2]])
+    #         d_ori = np.array([action[3], action[4], action[5]])
+    #     # print(action)
+    #     self.fem_sensor1.d_pos.from_numpy(d_pos)
+    #     self.fem_sensor1.d_ori.from_numpy(d_ori)
+    #     self.fem_sensor1.set_pose_control()
+    #     self.fem_sensor1.set_control_vel(0)
+    #     self.fem_sensor1.set_vel(0)
+    #     self.reset()
+    #     for ss in range(self.sub_steps - 1):
+    #         self.update(ss)
+    #     self.memory_to_cache(ts)
     
-    def compute_loss(self, ts):
-        if self.use_tactile:
-            self.compute_force_loss(ts)
-        if self.use_state:
-            self.compute_angle_loss(ts+1)
+    # def compute_loss(self, ts):
+    #     if self.use_tactile:
+    #         self.compute_force_loss(ts)
+    #     if self.use_state:
+    #         self.compute_angle_loss(ts+1)
         
         
-    def calculate_force(self, ts):
-        if self.use_tactile:
-            self.compute_contact_force(self.sub_steps - 2)
-        if self.use_state:
-            self.compute_angle(ts)
+    # def calculate_force(self, ts):
+    #     if self.use_tactile:
+    #         self.compute_contact_force(self.sub_steps - 2)
+    #     if self.use_state:
+    #         self.compute_angle(ts)
     
 
 
-def transform_2d(point, angle, translate):
-    theta = np.radians(angle)
-    rot_mat = np.array([[np.cos(theta), -np.sin(theta)],[np.sin(theta), np.cos(theta)]])
-    new_point = np.matmul(rot_mat, point.T).T + translate
-    return new_point
+# def transform_2d(point, angle, translate):
+#     theta = np.radians(angle)
+#     rot_mat = np.array([[np.cos(theta), -np.sin(theta)],[np.sin(theta), np.cos(theta)]])
+#     new_point = np.matmul(rot_mat, point.T).T + translate
+#     return new_point
 
 
 def main():
@@ -600,7 +600,7 @@ def main():
         contact_model.clear_state_loss_grad()
         
         for ts in range(num_total_steps-1):
-            contact_model.iter = ts
+            # contact_model.iter = ts
             contact_model.set_pos_control(ts)
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_control_vel(0)
