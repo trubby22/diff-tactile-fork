@@ -5,7 +5,6 @@ import os
 
 off_screen = False
 from difftactile.sensor_model.fem_sensor import FEMDomeSensor
-from difftactile.object_model.multi_obj import MultiObj
 from difftactile.object_model.mpm_elastic import MPMObj
 import argparse
 
@@ -369,7 +368,7 @@ class Contact:
             self.draw_pos3[i][1] = v + 0.5
 
     def draw_triangles(self, sensor, gui, f, tphi, ttheta, viz_scale, viz_offset):
-        inv_trans_h = sensor.inv_trans_h[None]
+        inv_trans_h = sensor.trans_h[None].inverse()
         pos_ = sensor.pos.to_numpy()[f, :]
         init_pos_ = sensor.virtual_pos.to_numpy()[f, :]
         ones = np.ones((pos_.shape[0], 1))
@@ -381,7 +380,7 @@ class Contact:
         c_p, s_p = np.cos(phi), np.sin(phi)
         c_t, s_t = np.cos(theta), np.sin(theta)
         c_seg_ = sensor.contact_seg.to_numpy()
-        a, b, c = pos_[c_seg_[:, 0]], pos_[c_seg_[:, 1]], pos_[c_seg_[:, 2]]
+        a, b, c = c_pos_[c_seg_[:, 0]], c_pos_[c_seg_[:, 1]], c_pos_[c_seg_[:, 2]]
         x = a[:, 0]
         y = a[:, 1]
         z = a[:, 2]
@@ -468,6 +467,11 @@ def main():
                 print("angle", contact_model.angle[ts])
             viz_scale = 0.25
             viz_offset = [-0.25, -0.5]
+            viz_scale_deformation_map = 0.2
+            viz_offset_deformation_map = [0.5, 0.5]
+            f_deformation = 0
+            r1_deformation = -90
+            r2_deformation = 90
             if not off_screen:
                 contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
@@ -489,7 +493,13 @@ def main():
                     )
                 if enable_gui3:
                     contact_model.draw_triangles(
-                        contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset
+                        contact_model.fem_sensor1,
+                        gui3,
+                        f_deformation,
+                        r1_deformation,
+                        r2_deformation,
+                        viz_scale_deformation_map,
+                        viz_offset_deformation_map,
                     )
                 if enable_gui1:
                     gui1.show()
@@ -565,7 +575,13 @@ def main():
                     )
                 if enable_gui3:
                     contact_model.draw_triangles(
-                        contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset
+                        contact_model.fem_sensor1,
+                        gui3,
+                        f_deformation,
+                        r1_deformation,
+                        r2_deformation,
+                        viz_scale_deformation_map,
+                        viz_offset_deformation_map,
                     )
                 if enable_gui1:
                     gui1.show()
