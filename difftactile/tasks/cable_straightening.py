@@ -685,7 +685,7 @@ def hasnan(vector):
 
 
 def main():
-    ti.init(arch=ti.gpu, device_memory_GB=4)
+    ti.init(arch=ti.gpu, device_memory_GB=9)
     if not Off_screen:
 
         window = ti.ui.Window("Rope manipulation" , (512, 512))
