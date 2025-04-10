@@ -46,7 +46,7 @@ class Contact:
                       obj_name=obj, 
                       space_scale = self.space_scale, 
                       obj_scale = self.obj_scale,
-                      density = 1.50,
+                      density = 1.50 / 2,
                       rho = 0.3)
         
         self.alpha = ti.field(float, ())
@@ -128,7 +128,9 @@ class Contact:
             
 
     def init(self):
-        self.ball_pos = [3.2, 1.0, 5.0]
+        move_x = -1.0
+
+        self.ball_pos = [3.2 + move_x, 1.0, 5.0]
         self.ball_ori = [0.0, 0.0, 90.0]
         self.ball_vel = [0.0, 0.0, 0.0]
         self.mpm_object.init(self.ball_pos, self.ball_ori, self.ball_vel)
@@ -145,7 +147,7 @@ class Contact:
         rx1 = 0.0
         ry1 = 0.0
         rz1 = 90.0
-        t_dx1 = 7.0#7.95
+        t_dx1 = 7.0 + move_x #7.95
         t_dy1 = 1.5
         t_dz1 = 5.0
 
