@@ -122,7 +122,7 @@ class Contact:
         ry1 = 0.0
         rz1 = 0.0
         t_dx1 = 3.0
-        t_dy1 = 3.0 + 1.55
+        t_dy1 = 3.0 + 1.3
         t_dz1 = 3.0
         self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
 
@@ -435,6 +435,27 @@ class Contact:
             viz_scale * np.array([uc, vc]).T + viz_offset,
             color=ti.rgb_to_hex([k + gb, gb, gb]),
         )
+        ext_f = sensor.external_force_field.to_numpy()[f, :]
+        in_contact_flag = np.sum(np.abs(ext_f), axis=1) > 0
+        if np.sum(in_contact_flag) > 0:
+            in_c_pos = c_pos_[in_contact_flag, :]
+            x = in_c_pos[:, 0]
+            y = in_c_pos[:, 1]
+            z = in_c_pos[:, 2]
+            xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+            ui, vi = xx + 0.2, y * c_t + zz * s_t + 0.5
+            avg_pos = np.mean(in_c_pos, axis=0)
+            x = avg_pos[0]
+            y = avg_pos[1]
+            z = avg_pos[2]
+            xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+            ua, va = xx + 0.2, y * c_t + zz * s_t + 0.5
+            gui.circles(
+                viz_scale * np.array([ui, vi]).T + viz_offset, radius=2, color=0xF542A1
+            )
+            gui.circle(
+                viz_scale * np.array([ua, va]).T + viz_offset, radius=5, color=0xE6C949
+            )
 
     def draw_table(self):
         c1 = ti.Vector([-self.table_scale, self.table_height, -self.table_scale])
@@ -454,7 +475,6 @@ class Contact:
     def draw_3d_scene(self, f: ti.i32):
         for p in range(self.mpm_object.n_particles):
             self.draw_pos_3d[p] = self.mpm_object.x_0[f, p] / self.view_scale
-
         for p in range(self.fem_sensor1.num_surface):
             idx = self.fem_sensor1.surface_id[p]
             self.draw_fem1_3d[p] = self.fem_sensor1.pos[f, idx] / self.view_scale
@@ -475,7 +495,7 @@ def main():
         camera.position(10, 10, 10)
         camera.up(0, 1, 0)
         camera.lookat(0, 0, 0)
-        camera.fov(90)
+        camera.fov(1.25)
         if enable_gui1:
             gui1 = ti.GUI("Contact Viz")
         else:
@@ -577,15 +597,20 @@ def main():
                 scene.ambient_light((0.8, 0.8, 0.8))
                 scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
                 contact_model.draw_3d_scene(0)
+                particle_radius = 0.001
                 scene.particles(
-                    contact_model.draw_pos_3d, color=(0.68, 0.26, 0.19), radius=5.0
+                    contact_model.draw_pos_3d,
+                    color=(0.68, 0.26, 0.19),
+                    radius=particle_radius,
                 )
                 scene.particles(
                     contact_model.draw_fem1_3d,
                     per_vertex_color=contact_model.color_fem1_3d,
-                    radius=5.0,
+                    radius=particle_radius,
                 )
-                # scene.lines(contact_model.draw_tableline, color = (0.28, 0.68, 0.99), width = 2.0)
+                # scene.lines(
+                #     contact_model.draw_tableline, color=(0.28, 0.68, 0.99), width=2.0
+                # )
                 canvas.scene(scene)
                 window.show()
         loss_frame = 0
