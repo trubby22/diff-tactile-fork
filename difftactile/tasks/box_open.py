@@ -134,7 +134,7 @@ class Contact:
         ry1 = 0.0
         rz1 = 90.0
         t_dx1 = 7.75
-        t_dy1 = 4.5
+        t_dy1 = 6.5
         t_dz1 = 5.0
 
         self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
@@ -448,8 +448,49 @@ class Contact:
             self.draw_pos3[i][0] = u + 0.2
             self.draw_pos3[i][1] = v + 0.5
 
+    # def draw_triangles(self, sensor, gui, f, tphi, ttheta, viz_scale, viz_offset):
+    #     inv_trans_h = sensor.inv_trans_h[None]
+    #     pos_ = sensor.pos.to_numpy()[f,:]
+    #     init_pos_ = sensor.virtual_pos.to_numpy()[f,:]
+    #     ones = np.ones((pos_.shape[0],1))
+
+    #     hom_pos_ = np.hstack((pos_, ones)) # N x 4
+    #     c_pos_ = np.matmul(inv_trans_h,hom_pos_.T).T[:,0:3] # Nx3
+
+    #     hom_pos_ = np.hstack((init_pos_, ones)) # N x 4
+    #     v_pos_ = np.matmul(inv_trans_h,hom_pos_.T).T[:,0:3] # Nx3
+
+    #     phi, theta = np.radians(tphi), np.radians(ttheta) # 28 20
+    #     c_p, s_p = np.cos(phi), np.sin(phi)
+    #     c_t, s_t = np.cos(theta), np.sin(theta)
+
+    #     c_seg_ = sensor.contact_seg.to_numpy()
+    #     offset = 0.0
+
+    #     a, b, c = pos_[c_seg_[:, 0]], pos_[c_seg_[:, 1]], pos_[c_seg_[:, 2]]
+    #     x = a[:,0]; y = a[:,1]; z = a[:,2]
+    #     xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+    #     ua, va = xx + 0.2, y * c_t + zz * s_t + 0.5
+
+    #     x = b[:,0]; y = b[:,1]; z = b[:,2]
+    #     xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+    #     ub, vb = xx + 0.2, y * c_t + zz * s_t + 0.5
+
+    #     x = c[:,0]; y = c[:,1]; z = c[:,2]
+    #     xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+    #     uc, vc = xx + 0.2, y * c_t + zz * s_t + 0.5
+
+    #     pa, pb, pc = c_pos_[c_seg_[:, 0]], c_pos_[c_seg_[:, 1]], c_pos_[c_seg_[:, 2]]
+    #     ba, bb, bc = v_pos_[c_seg_[:, 0]], v_pos_[c_seg_[:, 1]], v_pos_[c_seg_[:, 2]]
+    #     oa, ob, oc = pa[:, 1] - ba[:, 1], pb[:, 1] - bb[:, 1], pc[:, 1] - bc[:, 1]
+
+    #     k = -1 * (oa + ob + oc) * (1 / 3) * 1.0 # z deformation
+    #     gb = 0.5
+    #     # gui.triangles(np.array([a[:,0],a[:,2]]).T, np.array([b[:,0],b[:,2]]).T, np.array([c[:,0],c[:,2]]).T, color=ti.rgb_to_hex([k + gb, gb, gb]))
+    #     gui.triangles(viz_scale*np.array([ua,va]).T + viz_offset, viz_scale*np.array([ub,vb]).T + viz_offset, viz_scale*np.array([uc,vc]).T + viz_offset, color=ti.rgb_to_hex([k + gb, gb, gb]))
+
     def draw_triangles(self, sensor, gui, f, tphi, ttheta, viz_scale, viz_offset):
-        inv_trans_h = sensor.inv_trans_h[None]
+        inv_trans_h = sensor.trans_h[None].inverse()
         pos_ = sensor.pos.to_numpy()[f,:]
         init_pos_ = sensor.virtual_pos.to_numpy()[f,:]
         ones = np.ones((pos_.shape[0],1))
@@ -467,7 +508,7 @@ class Contact:
         c_seg_ = sensor.contact_seg.to_numpy()
         offset = 0.0
 
-        a, b, c = pos_[c_seg_[:, 0]], pos_[c_seg_[:, 1]], pos_[c_seg_[:, 2]]
+        a, b, c = c_pos_[c_seg_[:, 0]], c_pos_[c_seg_[:, 1]], c_pos_[c_seg_[:, 2]]
         x = a[:,0]; y = a[:,1]; z = a[:,2]
         xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
         ua, va = xx + 0.2, y * c_t + zz * s_t + 0.5
@@ -489,26 +530,27 @@ class Contact:
         # gui.triangles(np.array([a[:,0],a[:,2]]).T, np.array([b[:,0],b[:,2]]).T, np.array([c[:,0],c[:,2]]).T, color=ti.rgb_to_hex([k + gb, gb, gb]))
         gui.triangles(viz_scale*np.array([ua,va]).T + viz_offset, viz_scale*np.array([ub,vb]).T + viz_offset, viz_scale*np.array([uc,vc]).T + viz_offset, color=ti.rgb_to_hex([k + gb, gb, gb]))
 
+        ext_f = sensor.external_force_field.to_numpy()[f,:]
+        in_contact_flag = np.sum(np.abs(ext_f), axis=1) > 0
+        if np.sum(in_contact_flag) > 0:
+            in_c_pos = c_pos_[in_contact_flag,:]
+
+            x = in_c_pos[:,0]; y = in_c_pos[:,1]; z = in_c_pos[:,2]
+            xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+            ui, vi = xx + 0.2, y * c_t + zz * s_t + 0.5
+
+            avg_pos = np.mean(in_c_pos, axis=0)
+            x = avg_pos[0]; y = avg_pos[1]; z = avg_pos[2]
+            xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
+            ua, va = xx + 0.2, y * c_t + zz * s_t + 0.5
+
+            gui.circles(viz_scale*np.array([ui,vi]).T  + viz_offset, radius=2, color=0xf542a1)
+            gui.circle(viz_scale*np.array([ua,va]).T  + viz_offset, radius=5, color=0xe6c949)
+
     def calculate_force(self):
         self.fem_sensor1.get_external_force(self.fem_sensor1.sub_steps - 2)
         self.mpm_object.get_external_force(self.mpm_object.sub_steps - 2)
         self.compute_contact_force(self.sub_steps - 2)
-
-    def render(self, gui1, gui2, gui3):
-        viz_scale = 0.1
-        viz_offset = [0.0, 0.0]
-        self.fem_sensor1.extract_markers(0)
-        init_2d = self.fem_sensor1.virtual_markers.to_numpy()
-        marker_2d = self.fem_sensor1.predict_markers.to_numpy()
-        self.draw_markers(init_2d, marker_2d, gui2)
-        self.draw_perspective(0)
-        gui1.circles(viz_scale * self.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
-        gui1.circles(viz_scale * self.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-        # gui1.circles(viz_scale * self.draw_pos4.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-        self.draw_triangles(self.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
-        gui1.show()
-        gui2.show()
-        gui3.show()
 
     def apply_action(self, action, ts):
         if ts < self.total_steps // 4:
@@ -551,7 +593,7 @@ def transform_2d(point, angle, translate):
 
 
 def main():
-    ti.init(arch=ti.gpu, device_memory_GB=4)
+    ti.init(arch=ti.gpu, device_memory_GB=9)
 
     obj_name = "earpod-case.stl"
     num_sub_steps = 50
@@ -609,7 +651,12 @@ def main():
 
             ## visualizationw
             viz_scale = 0.1
+            viz_scale_deformation_map = 0.2
             viz_offset = [0.0, 0.0]
+            viz_offset_deformation_map = [0.5, 0.5]
+            f_deformation = 0
+            r1_deformation = -90
+            r2_deformation = 90
             # contact_model.lossNone] = 0.0
 
             if not off_screen:
@@ -624,7 +671,7 @@ def main():
                 contact_model.draw_perspective(0)
                 gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
                 gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-                contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
+                contact_model.draw_triangles(contact_model.fem_sensor1, gui3, f_deformation, r1_deformation, r2_deformation, viz_scale_deformation_map, viz_offset_deformation_map)
                 # contact_model.draw_deformation(scene, camera, window)
                 gui1.show()
                 gui2.show()
@@ -702,7 +749,7 @@ def main():
                 contact_model.draw_perspective(0)
                 gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
                 gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)
-                contact_model.draw_triangles(contact_model.fem_sensor1, gui3, 0, 0, 90, viz_scale, viz_offset)
+                contact_model.draw_triangles(contact_model.fem_sensor1, gui3, f_deformation, r1_deformation, r2_deformation, viz_scale_deformation_map, viz_offset_deformation_map)
                 # contact_model.draw_deformation(scene, camera, window)
 
 
