@@ -362,20 +362,61 @@ class Contact:
         offset = rescale * (cur_markers - init_markers) / scale
         if not off_screen:
             canvas = gui.get_canvas()
-            fst_np = draw_points[0]
-            print(type(draw_points))
-            print(fst_np)
-            print(draw_points.shape)
+            # fst_np = draw_points[0]
+            # print(type(draw_points))
+            # print(fst_np)
+            # print(draw_points.shape)
             points_field = ti.Vector.field(draw_points.shape[1], dtype=ti.f32, shape=(draw_points.shape[0],))
             points_field.from_numpy(draw_points.astype(np.float32))
-            print(type(points_field))
-            print(points_field.shape)
-            fst_ti = points_field[0]
-            print(type(fst_ti))
-            print(fst_ti)
-            print(len(fst_ti))
-            canvas.circles(points_field, radius=2, color=0xF542A1)
-            canvas.arrows(draw_points, 10.0 * offset, radius=2, color=0xE6C949)
+            # print(type(points_field))
+            # print(points_field.shape)
+            # fst_ti = points_field[0]
+            # print(type(fst_ti))
+            # print(fst_ti)
+            # print(len(fst_ti))
+            canvas.circles(points_field, radius=2)
+            # print(type(draw_points))
+            # print(draw_points.shape)
+            # print(type(draw_points[0]))
+            # print(draw_points[0])
+            # print(type(offset))
+            # print(offset.shape)
+            # print(type(offset[0]))
+            # print(offset[0])
+
+            # Assuming draw_points and offset are NumPy arrays of shape (n, 2)
+            n = draw_points.shape[0]
+
+            # Calculate end points: orig + direction
+            end_points = draw_points + 10.0 * offset
+
+            # Interleave orig and end points to form line segments
+            vertices_np = np.empty((2 * n, 2))
+            vertices_np[0::2] = draw_points  # Even indices: start points
+            vertices_np[1::2] = end_points    # Odd indices: end points
+
+            # Convert to Taichi field
+            vertices_ti = ti.Vector.field(2, dtype=ti.f32, shape=2 * n)
+            vertices_ti.from_numpy(vertices_np)
+
+            # Convert hex color (0xFFFFFF) to RGB tuple (1.0, 1.0, 1.0)
+            def hex_to_rgb(hex_color):
+                return ((hex_color >> 16) / 255.0, ((hex_color >> 8) & 0xFF) / 255.0, (hex_color & 0xFF) / 255.0)
+
+            color_rgb = hex_to_rgb(0xE6C949)  # Replace with original color if different
+
+            # Optional: Adjust line width based on window height
+            # window_height = window.get_window_shape()[1]
+            # width_relative = radius / window_height  # If radius is in pixels
+
+            # Draw lines
+            canvas.lines(
+                vertices=vertices_ti,
+                width=1,  # Adjust width as needed; original radius=1
+                color=color_rgb
+            )
+
+            # canvas.arrows(draw_points, 10.0 * offset, radius=2, color=0xE6C949)
 
     @ti.kernel
     def compute_angle(self, t: ti.i32):
@@ -607,6 +648,7 @@ def main():
                 contact_model.draw_perspective(0)
                 if enable_gui1:
                     canvas1 = gui1.get_canvas()
+                    # canvas1.vector_field()
                     canvas1.circles(
                         viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset,
                         radius=2,
