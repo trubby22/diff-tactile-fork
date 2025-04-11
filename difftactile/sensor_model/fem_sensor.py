@@ -21,7 +21,7 @@ class FEMDomeSensor:
         self.sub_steps = sub_steps
         self.dt = dt
         # sensor parameters, inner radius 7.5 mm, outer radius 15 mm
-        self.N_node = int(200 / 64)  # number of nodes in the most inner layer
+        self.N_node = int(200)  # number of nodes in the most inner layer
         self.N_t = 4  # thickness
         self.t_res = 0.25
         self.inner_radius = 0.75 / 4 # 7.5 mm radius

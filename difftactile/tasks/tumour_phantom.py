@@ -37,7 +37,7 @@ class Contact:
             obj_name=obj,
             space_scale=self.space_scale,
             obj_scale=self.obj_scale,
-            density=1.50 / 2,
+            density=1.50 * 2,
             rho=0.3,
         )
         self.alpha = ti.field(float, ())
@@ -128,7 +128,7 @@ class Contact:
         ry1 = 0.0
         rz1 = 0.0
         t_dx1 = x - 0.5
-        t_dy1 = y + self.fem_sensor1.outer_radius + 0.575
+        t_dy1 = y + self.fem_sensor1.outer_radius + 3.0
         t_dz1 = z
         self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
 
@@ -148,8 +148,8 @@ class Contact:
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
         
         if True:
-            vx1 = 1.5 * sf
-            vy1 = 0.0
+            vx1 = 0.0
+            vy1 = 1.5 * sf
             vz1 = 0.0
             rx1 = 0.0
             ry1 = 0.0
@@ -512,7 +512,7 @@ def main():
         grid_cols = 2
         window_width = screen_width // grid_cols
         window_height = screen_height // grid_rows
-        window_res = (int(window_width * 0.5), int(window_height * 0.5))
+        window_res = (int(window_width * 0.75), int(window_height * 0.75))
         window = ti.ui.Window("high-level camera", window_res)
         canvas = window.get_canvas()
         canvas.set_background_color((0, 0, 0))
@@ -524,15 +524,15 @@ def main():
         camera.lookat(0, 0, 0)
         camera.fov(2.0)
         if enable_gui1:
-            gui1 = ti.GUI("low-level camera", res=list(window_res))
+            gui1 = ti.GUI("low-level camera", res=window_res)
         else:
             gui1 = None
         if enable_gui2:
-            gui2 = ti.GUI("tactile readout 1", res=list(window_res))
+            gui2 = ti.GUI("tactile readout 1", res=window_res)
         else:
             gui2 = None
         if enable_gui3:
-            gui3 = ti.GUI("tactile readout 2", res=list(window_res))
+            gui3 = ti.GUI("tactile readout 2", res=window_res)
         else:
             gui3 = None
     phantom_name = "J03_2.obj"
@@ -577,9 +577,9 @@ def main():
             if False and USE_STATE:
                 contact_model.compute_angle(ts)
                 print("angle", contact_model.angle[ts])
-            viz_scale = 0.25
-            viz_offset = [-0.25, -0.5]
-            viz_scale_deformation_map = 0.2
+            viz_scale = 0.1
+            viz_offset = [0.25, 0.25]
+            viz_scale_deformation_map = viz_scale * 3
             viz_offset_deformation_map = [0.5, 0.5]
             f_deformation = 0
             r1_deformation = -90
