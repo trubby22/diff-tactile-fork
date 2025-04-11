@@ -15,6 +15,44 @@ enable_gui3 = True
 TI_TYPE = ti.f32
 NP_TYPE = np.float32
 
+def np_to_ti_2d_point_list(xs):
+    res = ti.Vector.field(xs.shape[1], dtype=TI_TYPE, shape=(xs.shape[0],))
+    res.from_numpy(xs.astype(NP_TYPE))
+
+def hex_to_rgb(hex_color):
+    return ((hex_color >> 16) / 255.0, ((hex_color >> 8) & 0xFF) / 255.0, (hex_color & 0xFF) / 255.0)
+
+def circles_adapter(canvas, pos, radius, color):
+    # gui.circles(draw_points, radius=2, color=0xF542A1)
+    pos_ti = np_to_ti_2d_point_list(pos)
+    color_rgb = hex_to_rgb(color)
+    canvas.circles(
+        pos=pos_ti,
+        radius=radius,
+        color=color_rgb,
+    )
+
+def circle_adapter(canvas, pos, radius, color):
+    # gui.circle(
+    #     viz_scale * np.array([ua, va]).T + viz_offset, radius=5, color=0xE6C949
+    # )
+    circles_adapter(canvas, pos, radius, color)
+
+def arrows_adapter(canvas, orig, direction, radius, color):
+    # gui.arrows(draw_points, 10.0 * offset, radius=2, color=0xE6C949)
+    n = orig.shape[0]
+    end_points = orig + direction
+    vertices_np = np.empty((2 * n, 2))
+    vertices_np[0::2] = orig  # Even indices: start points
+    vertices_np[1::2] = end_points    # Odd indices: end points
+    vertices_ti = np_to_ti_2d_point_list(vertices_np)
+    color_rgb = hex_to_rgb(color)
+    canvas.lines(
+        vertices=vertices_ti,
+        width=radius,
+        color=color_rgb,
+    )
+
 @ti.data_oriented
 class Contact:
     def __init__(
@@ -360,27 +398,10 @@ class Contact:
             init_markers - [img_width // 2, img_height // 2]
         ) / scale + [0.5, 0.5]
         offset = rescale * (cur_markers - init_markers) / scale
-        n = draw_points.shape[0]
         if not off_screen:
             canvas = gui.get_canvas()
-            points_field = ti.Vector.field(draw_points.shape[1], dtype=ti.f32, shape=(draw_points.shape[0],))
-            points_field.from_numpy(draw_points.astype(np.float32))
-            canvas.circles(points_field, radius=2)
-
-            end_points = draw_points + 10.0 * offset
-            vertices_np = np.empty((2 * n, 2))
-            vertices_np[0::2] = draw_points  # Even indices: start points
-            vertices_np[1::2] = end_points    # Odd indices: end points
-            vertices_ti = ti.Vector.field(2, dtype=ti.f32, shape=2 * n)
-            vertices_ti.from_numpy(vertices_np)
-            def hex_to_rgb(hex_color):
-                return ((hex_color >> 16) / 255.0, ((hex_color >> 8) & 0xFF) / 255.0, (hex_color & 0xFF) / 255.0)
-            color_rgb = hex_to_rgb(0xE6C949) 
-            canvas.lines(
-                vertices=vertices_ti,
-                width=1,
-                color=color_rgb
-            )
+            circles_adapter(canvas, draw_points, radius=2, color=0xF542A1)
+            arrows_adapter(canvas, draw_points, 10.0 * offset, radius=2, color=0xE6C949)
 
     @ti.kernel
     def compute_angle(self, t: ti.i32):
@@ -488,11 +509,11 @@ class Contact:
             z = avg_pos[2]
             xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
             ua, va = xx + 0.2, y * c_t + zz * s_t + 0.5
-            canvas.circles(
-                viz_scale * np.array([ui, vi]).T + viz_offset, radius=2, color=0xF542A1
+            circles_adapter(
+                canvas, viz_scale * np.array([ui, vi]).T + viz_offset, radius=2, color=0xF542A1
             )
-            canvas.circles(
-                viz_scale * np.array([ua, va]).T + viz_offset, radius=5, color=0xE6C949
+            circle_adapter(
+                canvas, viz_scale * np.array([ua, va]).T + viz_offset, radius=5, color=0xE6C949
             )
 
     def draw_table(self):
@@ -612,13 +633,14 @@ def main():
                 contact_model.draw_perspective(0)
                 if enable_gui1:
                     canvas1 = gui1.get_canvas()
-                    # canvas1.vector_field()
-                    canvas1.circles(
+                    circles_adapter(
+                        canvas1,
                         viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset,
                         radius=2,
                         color=0x039DFC,
                     )
-                    canvas1.circles(
+                    circles_adapter(
+                        canvas1,
                         viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset,
                         radius=2,
                         color=0xE6C949,

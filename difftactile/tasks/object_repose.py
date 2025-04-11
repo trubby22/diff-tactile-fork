@@ -749,6 +749,7 @@ def main():
                 marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
                 contact_model.draw_markers(init_2d, marker_2d, gui2)
                 contact_model.draw_perspective(0)
+                gui1.arrows()
                 gui1.circles(
                     viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset,
                     radius=2,
