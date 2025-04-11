@@ -18,6 +18,7 @@ NP_TYPE = np.float32
 def np_to_ti_2d_point_list(xs):
     res = ti.Vector.field(xs.shape[1], dtype=TI_TYPE, shape=(xs.shape[0],))
     res.from_numpy(xs.astype(NP_TYPE))
+    return res
 
 def hex_to_rgb(hex_color):
     return ((hex_color >> 16) / 255.0, ((hex_color >> 8) & 0xFF) / 255.0, (hex_color & 0xFF) / 255.0)
@@ -27,7 +28,7 @@ def circles_adapter(canvas, pos, radius, color):
     pos_ti = np_to_ti_2d_point_list(pos)
     color_rgb = hex_to_rgb(color)
     canvas.circles(
-        pos=pos_ti,
+        centers=pos_ti,
         radius=radius,
         color=color_rgb,
     )
