@@ -37,12 +37,7 @@ def circle_adapter(canvas, pos, radius, color):
     # gui.circle(
     #     viz_scale * np.array([ua, va]).T + viz_offset, radius=5, color=0xE6C949
     # )
-    # circles_adapter(canvas, pos, radius, color)
-    # print(type(pos))
-    # print(pos.shape)
-    # print(pos)
     pos = pos.reshape((1, pos.shape[0]))
-    # raise Exception()
     circles_adapter(canvas, pos, radius, color)
 
 def arrows_adapter(canvas, orig, direction, radius, color):
@@ -68,20 +63,9 @@ def triangles_adapter(canvas, a, b, c, color):
     vertices_np[2::3] = c
     vertices_ti = np_to_ti_nd_vector_list(vertices_np)
     color_rgb = hex_to_rgb(color)
-    # print(type(color_rgb))
-    # print(color_rgb)
-    # print(type(color_rgb[0]))
-    # print(len(color_rgb[0]))
     color_rgb_np = np.array(color_rgb).T
     color_rgb_np = np.vstack([color_rgb_np] * 3)
-    # print(type(color_rgb_np))
-    # print(color_rgb_np.shape)
-    # print(color_rgb_np[0])
     color_rgb_ti = np_to_ti_nd_vector_list(color_rgb_np)
-    # print(type(color_rgb_ti))
-    # print(color_rgb_ti.shape)
-    # print(color_rgb_ti[0])
-    # raise Exception()
     canvas.triangles(
         vertices=vertices_ti,
         per_vertex_color=color_rgb_ti,
