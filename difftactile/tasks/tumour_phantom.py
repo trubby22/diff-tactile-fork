@@ -15,7 +15,7 @@ enable_gui3 = True
 TI_TYPE = ti.f32
 NP_TYPE = np.float32
 
-def np_to_ti_2d_point_list(xs):
+def np_to_ti_nd_vector_list(xs):
     res = ti.Vector.field(xs.shape[1], dtype=TI_TYPE, shape=(xs.shape[0],))
     res.from_numpy(xs.astype(NP_TYPE))
     return res
@@ -25,7 +25,7 @@ def hex_to_rgb(hex_color):
 
 def circles_adapter(canvas, pos, radius, color):
     # gui.circles(draw_points, radius=2, color=0xF542A1)
-    pos_ti = np_to_ti_2d_point_list(pos)
+    pos_ti = np_to_ti_nd_vector_list(pos)
     color_rgb = hex_to_rgb(color)
     canvas.circles(
         centers=pos_ti,
@@ -46,13 +46,41 @@ def arrows_adapter(canvas, orig, direction, radius, color):
     vertices_np = np.empty((2 * n, 2))
     vertices_np[0::2] = orig  # Even indices: start points
     vertices_np[1::2] = end_points    # Odd indices: end points
-    vertices_ti = np_to_ti_2d_point_list(vertices_np)
+    vertices_ti = np_to_ti_nd_vector_list(vertices_np)
     color_rgb = hex_to_rgb(color)
     canvas.lines(
         vertices=vertices_ti,
         width=radius,
         color=color_rgb,
     )
+
+def triangles_adapter(canvas, a, b, c, color):
+    n = a.shape[0]
+    vertices_np = np.empty((3 * n, 2))
+    vertices_np[0::3] = a
+    vertices_np[1::3] = b
+    vertices_np[2::3] = c
+    vertices_ti = np_to_ti_nd_vector_list(vertices_np)
+    color_rgb = hex_to_rgb(color)
+    # print(type(color_rgb))
+    # print(color_rgb)
+    # print(type(color_rgb[0]))
+    # print(len(color_rgb[0]))
+    color_rgb_np = np.array(color_rgb).T
+    color_rgb_np = np.vstack([color_rgb_np] * 3)
+    # print(type(color_rgb_np))
+    # print(color_rgb_np.shape)
+    # print(color_rgb_np[0])
+    color_rgb_ti = np_to_ti_nd_vector_list(color_rgb_np)
+    # print(type(color_rgb_ti))
+    # print(color_rgb_ti.shape)
+    # print(color_rgb_ti[0])
+    # raise Exception()
+    canvas.triangles(
+        vertices=vertices_ti,
+        per_vertex_color=color_rgb_ti,
+    )
+
 
 @ti.data_oriented
 class Contact:
@@ -489,7 +517,8 @@ class Contact:
         oa, ob, oc = pa[:, 1] - ba[:, 1], pb[:, 1] - bb[:, 1], pc[:, 1] - bc[:, 1]
         k = -1 * (oa + ob + oc) * (1 / 3) * 1.0
         gb = 0.5
-        canvas.triangles(
+        triangles_adapter(
+            canvas,
             viz_scale * np.array([ua, va]).T + viz_offset,
             viz_scale * np.array([ub, vb]).T + viz_offset,
             viz_scale * np.array([uc, vc]).T + viz_offset,
