@@ -7,3 +7,4 @@ difftactile.egg-info
 lr_*/
 *.txt
 *.ipynb
+*.md

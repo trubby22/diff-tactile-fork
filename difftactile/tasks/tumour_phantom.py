@@ -451,7 +451,7 @@ class Contact:
         k = -1 * (oa + ob + oc) * (1 / 3) * 1.0
         gb = 0.5
         canvas.triangles(
-            viz_scale * (np.array([ua, va]).T) + viz_offset,
+            viz_scale * np.array([ua, va]).T + viz_offset,
             viz_scale * np.array([ub, vb]).T + viz_offset,
             viz_scale * np.array([uc, vc]).T + viz_offset,
             color=ti.rgb_to_hex([k + gb, gb, gb]),
@@ -474,7 +474,7 @@ class Contact:
             canvas.circles(
                 viz_scale * np.array([ui, vi]).T + viz_offset, radius=2, color=0xF542A1
             )
-            canvas.circle(
+            canvas.circles(
                 viz_scale * np.array([ua, va]).T + viz_offset, radius=5, color=0xE6C949
             )
 
