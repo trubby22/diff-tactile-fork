@@ -134,26 +134,27 @@ class Contact:
 
     @ti.kernel
     def init_pos_control(self):
-        sf = 100
+        sf = 10
+        init_steps = 500
 
         vx1 = 0.0
-        vy1 = 1.5 * sf
+        vy1 = 0.0
         vz1 = 0.0
         rx1 = 0.0
         ry1 = 0.0
         rz1 = 0.0
-        for i in range(0, self.total_steps):
+        for i in range(0, init_steps):
             self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
         
-        if False:
+        if True:
             vx1 = 1.5 * sf
             vy1 = 0.0
             vz1 = 0.0
             rx1 = 0.0
             ry1 = 0.0
             rz1 = 0.0
-            for i in range(200, self.total_steps):
+            for i in range(init_steps, self.total_steps):
                 self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
                 self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
@@ -503,7 +504,7 @@ class Contact:
 
 
 def main():
-    ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
+    ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
     if not off_screen:
         window = ti.ui.Window("Tumour palpation", (int(1920 * 0.5), int(1080 * 0.5)))
         canvas = window.get_canvas()
@@ -514,7 +515,7 @@ def main():
         camera.position(10, 10, 10)
         camera.up(0, 1, 0)
         camera.lookat(0, 0, 0)
-        camera.fov(1.25)
+        camera.fov(2.0)
         if enable_gui1:
             gui1 = ti.GUI("Contact Viz")
         else:
