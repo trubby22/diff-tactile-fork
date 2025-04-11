@@ -27,7 +27,7 @@ class Contact:
         self.use_tactile = use_tactile
         self.use_state = use_state
         self.space_scale = 10.0
-        self.obj_scale = 1.0
+        self.obj_scale = 4.0
         self.dim = 3
         self.p_rad = 0.25
         self.table_height = 0.0
@@ -37,8 +37,8 @@ class Contact:
             obj_name=obj,
             space_scale=self.space_scale,
             obj_scale=self.obj_scale,
-            density=4.0,
-            rho=6.0,
+            density=1.50 / 2,
+            rho=0.3,
         )
         self.alpha = ti.field(float, ())
         self.beta = ti.field(float, ())
@@ -116,39 +116,46 @@ class Contact:
         self.angle_z = ti.field(float, ())
 
     def init(self):
-        self.phantom_pos = [3.0, 3.0, 3.0]
+        x = 3.0
+        y = 2.25
+        z = 3.0
+
+        self.phantom_pos = [x, y, z]
         self.phantom_ori = [0.0, 0.0, 0.0]
         self.phantom_vel = [0.0, 0.0, 0.0]
         self.mpm_object.init(self.phantom_pos, self.phantom_ori, self.phantom_vel)
         rx1 = 180.0
         ry1 = 0.0
         rz1 = 0.0
-        t_dx1 = 3.0
-        t_dy1 = 3.0 + self.fem_sensor1.outer_radius + 0.575
-        t_dz1 = 3.0
+        t_dx1 = x - 0.5
+        t_dy1 = y + self.fem_sensor1.outer_radius + 0.575
+        t_dz1 = z
         self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
 
     @ti.kernel
     def init_pos_control(self):
+        sf = 100
+
         vx1 = 0.0
-        vy1 = 2.0
+        vy1 = 1.5 * sf
         vz1 = 0.0
         rx1 = 0.0
         ry1 = 0.0
         rz1 = 0.0
-        for i in range(0, 200):
+        for i in range(0, self.total_steps):
             self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
         
-        vx1 = 2.0
-        vy1 = 0.0
-        vz1 = 0.0
-        rx1 = 0.0
-        ry1 = 0.0
-        rz1 = 0.0
-        for i in range(200, self.total_steps):
-            self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
-            self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
+        if False:
+            vx1 = 1.5 * sf
+            vy1 = 0.0
+            vz1 = 0.0
+            rx1 = 0.0
+            ry1 = 0.0
+            rz1 = 0.0
+            for i in range(200, self.total_steps):
+                self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
+                self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
     @ti.kernel
     def set_pos_control(self, f: ti.i32):
@@ -498,7 +505,7 @@ class Contact:
 def main():
     ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
     if not off_screen:
-        window = ti.ui.Window("Tumour palpation", (int(1920 * 0.9), int(1080 * 0.9)))
+        window = ti.ui.Window("Tumour palpation", (int(1920 * 0.5), int(1080 * 0.5)))
         canvas = window.get_canvas()
         canvas.set_background_color((0, 0, 0))
         scene = ti.ui.Scene()
