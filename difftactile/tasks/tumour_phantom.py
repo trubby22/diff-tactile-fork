@@ -37,6 +37,12 @@ def circle_adapter(canvas, pos, radius, color):
     # gui.circle(
     #     viz_scale * np.array([ua, va]).T + viz_offset, radius=5, color=0xE6C949
     # )
+    # circles_adapter(canvas, pos, radius, color)
+    # print(type(pos))
+    # print(pos.shape)
+    # print(pos)
+    pos = pos.reshape((1, pos.shape[0]))
+    # raise Exception()
     circles_adapter(canvas, pos, radius, color)
 
 def arrows_adapter(canvas, orig, direction, radius, color):
