@@ -15,6 +15,15 @@ enable_gui3 = True
 TI_TYPE = ti.f32
 NP_TYPE = np.float32
 
+# def scale_np_img(arr, ):
+#     xs = arr[:, 0]
+#     ys = arr[:, 1]
+
+#     min_val = np.min(xs)
+#     max_val = np.max(xs)
+
+#     scaled_arr = a + (b - a) * (arr - min_val) / (max_val - min_val)
+
 def np_to_ti_nd_vector_list(xs):
     res = ti.Vector.field(xs.shape[1], dtype=TI_TYPE, shape=(xs.shape[0],))
     res.from_numpy(xs.astype(NP_TYPE))
@@ -23,13 +32,15 @@ def np_to_ti_nd_vector_list(xs):
 def hex_to_rgb(hex_color):
     return ((hex_color >> 16) / 255.0, ((hex_color >> 8) & 0xFF) / 255.0, (hex_color & 0xFF) / 255.0)
 
-def circles_adapter(canvas, pos, radius, color):
+def circles_adapter(canvas, pos, radius, color, window_res=None):
     # gui.circles(draw_points, radius=2, color=0xF542A1)
+    if window_res is not None:
+        pass
     pos_ti = np_to_ti_nd_vector_list(pos)
     color_rgb = hex_to_rgb(color)
     canvas.circles(
         centers=pos_ti,
-        radius=radius,
+        radius=1,
         color=color_rgb,
     )
 
@@ -51,11 +62,12 @@ def arrows_adapter(canvas, orig, direction, radius, color):
     color_rgb = hex_to_rgb(color)
     canvas.lines(
         vertices=vertices_ti,
-        width=radius,
+        width=1,
         color=color_rgb,
     )
 
 def triangles_adapter(canvas, a, b, c, color):
+    return
     n = a.shape[0]
     vertices_np = np.empty((3 * n, 2))
     vertices_np[0::3] = a
@@ -563,7 +575,7 @@ class Contact:
 
 
 def main():
-    ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
+    ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
     if not off_screen:
         screen_width = 1920
         screen_height = 1080
@@ -636,10 +648,10 @@ def main():
             if False and USE_STATE:
                 contact_model.compute_angle(ts)
                 print("angle", contact_model.angle[ts])
-            viz_scale = 0.25
-            viz_offset = [-0.25, -0.5]
-            viz_scale_deformation_map = 0.2
-            viz_offset_deformation_map = [0.5, 0.5]
+            viz_scale = 0.001
+            viz_offset = [0.0, 0.0]
+            viz_scale_deformation_map = viz_scale
+            viz_offset_deformation_map = viz_offset
             f_deformation = 0
             r1_deformation = -90
             r2_deformation = 90
