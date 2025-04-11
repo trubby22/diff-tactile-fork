@@ -366,16 +366,14 @@ class Contact:
             print(type(draw_points))
             print(fst_np)
             print(draw_points.shape)
-            padded_draw_points = np.hstack((draw_points, np.zeros((draw_points.shape[0], 1)))).astype(np.float32)
-            # Create a 1D Taichi Vector field with 3 components (3D vectors)
-            points_field = ti.Vector.field(3, dtype=ti.f32, shape=(draw_points.shape[0],))
-            # Transfer data from numpy to Taichi field
-            points_field.from_numpy(padded_draw_points)
+            points_field = ti.Vector.field(draw_points.shape[1], dtype=ti.f32, shape=(draw_points.shape[0],))
+            points_field.from_numpy(draw_points.astype(np.float32))
             print(type(points_field))
             print(points_field.shape)
             fst_ti = points_field[0]
             print(type(fst_ti))
             print(fst_ti)
+            print(len(fst_ti))
             canvas.circles(points_field, radius=2, color=0xF542A1)
             canvas.arrows(draw_points, 10.0 * offset, radius=2, color=0xE6C949)
 
