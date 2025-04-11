@@ -12,8 +12,8 @@ enable_gui1 = True
 enable_gui2 = True
 enable_gui3 = True
 
-
-
+TI_TYPE = ti.f32
+NP_TYPE = np.float32
 
 @ti.data_oriented
 class Contact:
@@ -361,8 +361,9 @@ class Contact:
         ) / scale + [0.5, 0.5]
         offset = rescale * (cur_markers - init_markers) / scale
         if not off_screen:
-            gui.circles(draw_points, radius=2, color=0xF542A1)
-            gui.arrows(draw_points, 10.0 * offset, radius=2, color=0xE6C949)
+            canvas = gui.get_canvas()
+            canvas.circles(draw_points, radius=2, color=0xF542A1)
+            canvas.arrows(draw_points, 10.0 * offset, radius=2, color=0xE6C949)
 
     @ti.kernel
     def compute_angle(self, t: ti.i32):
@@ -415,6 +416,7 @@ class Contact:
             self.draw_pos3[i][1] = v + 0.5
 
     def draw_triangles(self, sensor, gui, f, tphi, ttheta, viz_scale, viz_offset):
+        canvas = gui.get_canvas()
         inv_trans_h = sensor.trans_h[None].inverse()
         pos_ = sensor.pos.to_numpy()[f, :]
         init_pos_ = sensor.virtual_pos.to_numpy()[f, :]
@@ -448,8 +450,8 @@ class Contact:
         oa, ob, oc = pa[:, 1] - ba[:, 1], pb[:, 1] - bb[:, 1], pc[:, 1] - bc[:, 1]
         k = -1 * (oa + ob + oc) * (1 / 3) * 1.0
         gb = 0.5
-        gui.triangles(
-            viz_scale * np.array([ua, va]).T + viz_offset,
+        canvas.triangles(
+            viz_scale * (np.array([ua, va]).T) + viz_offset,
             viz_scale * np.array([ub, vb]).T + viz_offset,
             viz_scale * np.array([uc, vc]).T + viz_offset,
             color=ti.rgb_to_hex([k + gb, gb, gb]),
@@ -469,10 +471,10 @@ class Contact:
             z = avg_pos[2]
             xx, zz = x * c_p + z * s_p, z * c_p - x * s_p
             ua, va = xx + 0.2, y * c_t + zz * s_t + 0.5
-            gui.circles(
+            canvas.circles(
                 viz_scale * np.array([ui, vi]).T + viz_offset, radius=2, color=0xF542A1
             )
-            gui.circle(
+            canvas.circle(
                 viz_scale * np.array([ua, va]).T + viz_offset, radius=5, color=0xE6C949
             )
 
@@ -511,7 +513,8 @@ def main():
         grid_cols = 2
         window_width = screen_width // grid_cols
         window_height = screen_height // grid_rows
-        window = ti.ui.Window(title="high-level camera", width=window_width, height=window_height, pos=(0, 0))
+        window_res = (int(window_width * 0.5), int(window_height * 0.5))
+        window = ti.ui.Window(name="high-level camera", res=window_res, pos=(0, 0))
         canvas = window.get_canvas()
         canvas.set_background_color((0, 0, 0))
         scene = ti.ui.Scene()
@@ -522,15 +525,15 @@ def main():
         camera.lookat(0, 0, 0)
         camera.fov(1.25)
         if enable_gui1:
-            gui1 = ti.GUI(title="low-level camera", width=window_width, height=window_height, pos=(window_width, 0))
+            gui1 = ti.ui.Window(name="low-level camera", res=window_res, pos=(window_width, 0))
         else:
             gui1 = None
         if enable_gui2:
-            gui2 = ti.GUI(title="tactile markers", width=window_width, height=window_height, pos=(0, window_height))
+            gui2 = ti.ui.Window(name="tactile markers", res=window_res, pos=(0, window_height))
         else:
             gui2 = None
         if enable_gui3:
-            gui3 = ti.GUI(title="deformation heat map", width=window_width, height=window_height, pos=(window_width, window_height))
+            gui3 = ti.ui.Window(name="deformation heat map", res=window_res, pos=(window_width, window_height))
         else:
             gui3 = None
     phantom_name = "J03_2.obj"
@@ -591,12 +594,13 @@ def main():
             if not off_screen:
                 contact_model.draw_perspective(0)
                 if enable_gui1:
-                    gui1.circles(
+                    canvas1 = gui1.get_canvas()
+                    canvas1.circles(
                         viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset,
                         radius=2,
                         color=0x039DFC,
                     )
-                    gui1.circles(
+                    canvas1.circles(
                         viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset,
                         radius=2,
                         color=0xE6C949,
