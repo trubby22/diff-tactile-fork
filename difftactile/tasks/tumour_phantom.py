@@ -505,7 +505,13 @@ class Contact:
 def main():
     ti.init(debug=True, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
     if not off_screen:
-        window = ti.ui.Window("Tumour palpation", (int(1920 * 0.5), int(1080 * 0.5)))
+        screen_width = 1920
+        screen_height = 1080
+        grid_rows = 2
+        grid_cols = 2
+        window_width = screen_width // grid_cols
+        window_height = screen_height // grid_rows
+        window = ti.ui.Window(title="high-level camera", width=window_width, height=window_height, pos=(0, 0))
         canvas = window.get_canvas()
         canvas.set_background_color((0, 0, 0))
         scene = ti.ui.Scene()
@@ -516,15 +522,15 @@ def main():
         camera.lookat(0, 0, 0)
         camera.fov(1.25)
         if enable_gui1:
-            gui1 = ti.GUI("Contact Viz")
+            gui1 = ti.GUI(title="low-level camera", width=window_width, height=window_height, pos=(window_width, 0))
         else:
             gui1 = None
         if enable_gui2:
-            gui2 = ti.GUI("Force Map 1")
+            gui2 = ti.GUI(title="tactile markers", width=window_width, height=window_height, pos=(0, window_height))
         else:
             gui2 = None
         if enable_gui3:
-            gui3 = ti.GUI("Deformation Map 1")
+            gui3 = ti.GUI(title="deformation heat map", width=window_width, height=window_height, pos=(window_width, window_height))
         else:
             gui3 = None
     phantom_name = "J03_2.obj"
