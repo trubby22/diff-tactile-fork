@@ -66,20 +66,48 @@ def get_marker_image(img):
     detector = cv2.SimpleBlobDetector_create(params)
     keypoints = detector.detect(img)
 
+
     MarkerCenter = []
     for pt in keypoints:
         MarkerCenter.append([pt.pt[0], pt.pt[1]])
     MarkerCenter = np.array(MarkerCenter)
 
     # filter out invalid markers
-    center_coordinates = np.array([320, 240])
-    w_length = 150
-    h_length = 100
-    start_point = (320 - w_length, 240 - h_length)
-    end_point = (320 + w_length, 240 + h_length)
+    if False:
+        center_coordinates = np.array([320, 240])
+        w_length = 150
+        h_length = 100
+        start_point = (320 - w_length, 240 - h_length)
+        end_point = (320 + w_length, 240 + h_length)
 
-    offset = np.abs(MarkerCenter[:, 0:2] - center_coordinates)
-    valid_marker_mask = np.logical_and(offset[:, 0] < w_length, offset[:, 1] < h_length)
-    MarkerCenter = MarkerCenter[valid_marker_mask]
+        offset = np.abs(MarkerCenter[:, 0:2] - center_coordinates)
+        valid_marker_mask = np.logical_and(offset[:, 0] < w_length, offset[:, 1] < h_length)
+        MarkerCenter = MarkerCenter[valid_marker_mask]
 
     return MarkerCenter
+
+if __name__ == '__main__':
+    # Load the init.png image from the same directory
+    img = cv2.imread("system-id-screws-3-reps-0001.png")
+    if img is None:
+        print("Error: Could not load system-id-screws-3-reps-0001.png")
+    else:
+        # Get marker positions from the image
+        marker_positions = get_marker_image(img)
+        print("Detected marker positions:")
+        print(marker_positions)
+        
+        # Create a copy of the image for visualization
+        vis_img = img.copy()
+        
+        # Draw detected markers
+        for pos in marker_positions:
+            # Convert positions to integers for drawing
+            center = (int(pos[0]), int(pos[1]))
+            # Draw a circle at each marker position (red color)
+            cv2.circle(vis_img, center, radius=5, color=(0, 0, 255), thickness=2)
+            
+        # Display the image with detected markers
+        cv2.imshow("Detected Markers", vis_img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
