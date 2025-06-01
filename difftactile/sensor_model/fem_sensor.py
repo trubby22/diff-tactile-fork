@@ -147,6 +147,16 @@ class FEMDomeSensor:
         )
         self.sdf = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
         self.cache = dict()  # for grad backward
+        
+        # Video writer setup
+        self.video_writer = None
+        self.frame_width = 640  # Same as in fisheye model
+        self.frame_height = 480  # Same as in fisheye model
+        self.video_fps = 30
+        
+        # Frame buffer
+        self.frame_buffer = []
+        self.buffer_size = 100
 
     def init(self, rot_x, rot_y, rot_z, t_dx, t_dy, t_dz):
         rot = R.from_rotvec(np.deg2rad([rot_x, rot_y, rot_z]))
@@ -518,13 +528,6 @@ class FEMDomeSensor:
             V_i = ti.abs(D_i.determinant()) / 6
             F_i = D_i @ self.B[i]
 
-            # ## original version
-            # F_T = F_i.inverse().transpose()
-            # J = F_i.determinant()
-            # J = ti.max(0.2, F_i.determinant())
-            # log_J_i = ti.log(J)
-            # stress = self.mu[None] * (F_i -  F_T) + self.lam[None] * log_J_i * F_T
-
             ## stable neo-hooken
             J = F_i.determinant()
             IC = (F_i.transpose() @ F_i).trace()
@@ -695,3 +698,58 @@ class FEMDomeSensor:
                 self.pos.grad[t, p].fill(0.0)
                 self.vel.grad[t, p].fill(0.0)
                 self.virtual_pos.grad[t, p].fill(0.0)
+
+    def init_video_writer(self, video_path):
+        """Initialize video writer for saving simulated sensor frames."""
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')  # XVID codec for .mkv
+        self.video_writer = cv2.VideoWriter(
+            video_path,
+            fourcc,
+            self.video_fps,
+            (self.frame_width, self.frame_height),
+            isColor=True
+        )
+        
+    def save_frame_to_buffer(self, f: ti.i32):
+        """Save current sensor frame to buffer."""
+        if self.video_writer is None:
+            return
+            
+        # Create a blank frame
+        frame = np.zeros((self.frame_height, self.frame_width, 3), dtype=np.uint8)
+        
+        # Extract and project markers
+        self.extract_markers(f)
+        
+        # Draw markers on frame
+        for i in range(self.num_markers):
+            pos = self.predict_markers.to_numpy()[i]
+            center = (int(pos[0]), int(pos[1]))
+            cv2.circle(frame, center, radius=5, color=(0, 0, 255), thickness=2)
+        
+        # Add frame to buffer
+        self.frame_buffer.append(frame)
+        
+        # If buffer is full, write to file
+        if len(self.frame_buffer) >= self.buffer_size:
+            self.flush_buffer()
+            
+    def flush_buffer(self):
+        """Write all frames in buffer to video file and clear buffer."""
+        if self.video_writer is None or not self.frame_buffer:
+            return
+            
+        for frame in self.frame_buffer:
+            self.video_writer.write(frame)
+        self.frame_buffer.clear()
+        
+    def close_video_writer(self):
+        """Close video writer if it exists, after flushing any remaining frames."""
+        if self.video_writer is not None:
+            self.flush_buffer()  # Write any remaining frames
+            self.video_writer.release()
+            self.video_writer = None
+            
+    def __del__(self):
+        """Ensure video writer is closed when object is destroyed."""
+        self.close_video_writer()

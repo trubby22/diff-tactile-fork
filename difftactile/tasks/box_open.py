@@ -624,7 +624,7 @@ def transform_2d(point, angle, translate):
 
 
 def main():
-    ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
+    ti.init(debug=False, offline_cache=False)
 
     obj_name = "earpod-case.stl"
     num_sub_steps = 50
@@ -634,17 +634,13 @@ def main():
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
 
     if not off_screen:
-        gui1 = ti.GUI("Contact Viz")
-        gui2 = ti.GUI("Force Map 1")
-        # gui2 = None
-        # gui3 = ti.GUI("Deformation Map 1")
-        gui3 = None
+        gui1 = ti.GUI("a")
+        gui2 = ti.GUI("b")
+        gui3 = ti.GUI("c")
 
     losses = []
     contact_model.init_pos_control()
     contact_model.load_target()
-
-    # contact_model.load_pos_control()
 
     form_loss = 0
 
@@ -653,18 +649,25 @@ def main():
         contact_model.init()
         contact_model.clear_all_grad()
         contact_model.clear_state_loss_grad()
+        
+        # Initialize video writer for this optimization step
+        video_path = f"sensor_video_opt_{opts:03d}.mkv"
+        contact_model.fem_sensor1.init_video_writer(video_path)
 
         for ts in range(num_total_steps-1):
             contact_model.iter = ts
-            # contact_model.set_vel_control(ts)
             contact_model.set_pos_control(ts)
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_control_vel(0)
             contact_model.fem_sensor1.set_vel(0)
             contact_model.reset()
+            
             for ss in range(num_sub_steps - 1):
                 contact_model.update(ss)
-
+            
+            # Save the frame to buffer (will automatically write to file when buffer is full)
+            contact_model.fem_sensor1.save_frame_to_buffer(0)
+            
             contact_model.memory_to_cache(ts)
 
             # ########
@@ -710,6 +713,9 @@ def main():
                 gui2.show()
                 # gui3.show()
 
+        # Close video writer for this optimization step (will flush any remaining frames)
+        contact_model.fem_sensor1.close_video_writer()
+        
         ## backward!
         loss_frame = 0
         form_loss = 0

@@ -7,3 +7,5 @@ difftactile.egg-info
 lr_*/
 *.txt
 *.ipynb
+*.pkl
+*.mkv

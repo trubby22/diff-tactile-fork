@@ -5,6 +5,8 @@ a class to model fisheye camera
 import numpy as np
 import cv2
 import taichi as ti
+import pickle
+from tqdm import tqdm  # For progress bar
 
 
 @ti.func
@@ -87,27 +89,77 @@ def get_marker_image(img):
     return MarkerCenter
 
 if __name__ == '__main__':
-    # Load the init.png image from the same directory
-    img = cv2.imread("system-id-screws-3-reps-0001.png")
-    if img is None:
-        print("Error: Could not load system-id-screws-3-reps-0001.png")
-    else:
-        # Get marker positions from the image
-        marker_positions = get_marker_image(img)
-        print("Detected marker positions:")
-        print(marker_positions)
-        
-        # Create a copy of the image for visualization
-        vis_img = img.copy()
-        
-        # Draw detected markers
-        for pos in marker_positions:
-            # Convert positions to integers for drawing
-            center = (int(pos[0]), int(pos[1]))
-            # Draw a circle at each marker position (red color)
-            cv2.circle(vis_img, center, radius=5, color=(0, 0, 255), thickness=2)
+    # Open the video file
+    video_path = "system-id-screws-3-reps.mkv"
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"Error: Could not open video file {video_path}")
+        exit()
+    
+    # Get video properties
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    duration_secs = total_frames / fps
+    print(f"Video properties:")
+    print(f"- Total frames: {total_frames}")
+    print(f"- FPS: {fps}")
+    print(f"- Duration: {duration_secs:.2f} seconds")
+    
+    # Initialize variables
+    frames_per_batch = 100  # Number of frames to process before saving
+    current_batch = []
+    batch_number = 0
+    pickle_file = "marker_positions.pkl"
+    frames_to_skip = fps - 1  # We'll process 1 frame and skip (fps-1) frames
+    
+    # Process frames
+    frame_idx = 0
+    with tqdm(total=int(duration_secs)) as pbar:
+        while frame_idx < total_frames:
+            ret, frame = cap.read()
+            if not ret:
+                print(f"Error reading frame {frame_idx}")
+                break
+                
+            # Process one frame per second
+            if frame_idx % fps == 0:  # This frame is on a second boundary
+                # Get marker positions for this frame
+                marker_positions = get_marker_image(frame)
+                current_batch.append(marker_positions)
+                
+                # If we've collected enough frames, save the batch
+                if len(current_batch) >= frames_per_batch or frame_idx >= total_frames - fps:
+                    # Save batch to pickle file in append mode
+                    with open(pickle_file, 'ab' if batch_number > 0 else 'wb') as f:
+                        pickle.dump(current_batch, f)
+                    
+                    # Clear the current batch and increment batch number
+                    current_batch = []
+                    batch_number += 1
+                    print(f"\nSaved batch {batch_number} to {pickle_file}")
+                
+                # Optional: Display progress
+                vis_frame = frame.copy()
+                # Draw detected markers
+                for pos in marker_positions:
+                    center = (int(pos[0]), int(pos[1]))
+                    cv2.circle(vis_frame, center, radius=5, color=(0, 0, 255), thickness=2)
+                
+                # Display frame with markers
+                cv2.imshow("Processing Video (1 fps)", vis_frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to quit
+                    break
+                    
+                pbar.update(1)  # Update progress bar for each second processed
             
-        # Display the image with detected markers
-        cv2.imshow("Detected Markers", vis_img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+            # Skip frames to get to the next second
+            for _ in range(min(frames_to_skip, total_frames - frame_idx - 1)):
+                cap.read()  # Read and discard frames
+            frame_idx += fps  # Jump to next second
+    
+    # Cleanup
+    cap.release()
+    cv2.destroyAllWindows()
+    
+    print("\nProcessing complete!")
+    print(f"Results saved to {pickle_file} in {batch_number} batches")
