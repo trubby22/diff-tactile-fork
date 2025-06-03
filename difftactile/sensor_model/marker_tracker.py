@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from fisheye_model import get_marker_image
 import tkinter as tk
 from PIL import Image, ImageTk
-from pycpd import DeformableRegistration
-from scipy.spatial import cKDTree
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cdist
 
 class MarkerTracker:
     def __init__(self, video_path, output_path=None):
@@ -23,11 +23,70 @@ class MarkerTracker:
         self.base_frame_mappings = []  # List to store mappings to frame 0
         self.frames = []  # List to store actual frames
         
+        # Shape context parameters
+        self.n_angular_bins = 12
+        self.n_radial_bins = 5
+        self.inner_radius = 0.1
+        self.outer_radius = 2.0
+        
+    def compute_shape_context(self, points):
+        """
+        Compute shape context descriptors for a set of points.
+        
+        Args:
+            points (np.ndarray): Array of shape (N, 2) containing point coordinates
+            
+        Returns:
+            np.ndarray: Array of shape (N, n_radial_bins * n_angular_bins) containing shape context descriptors
+        """
+        n_points = len(points)
+        if n_points < 2:
+            return np.zeros((n_points, self.n_radial_bins * self.n_angular_bins))
+            
+        # Compute pairwise distances and angles
+        diff = points[:, np.newaxis, :] - points[np.newaxis, :, :]
+        dists = np.sqrt(np.sum(diff * diff, axis=2))
+        angles = np.arctan2(diff[:, :, 1], diff[:, :, 0])
+        
+        # Normalize distances
+        mean_dist = np.mean(dists[dists > 0])
+        dists = dists / mean_dist
+        
+        # Create histogram bins
+        r_edges = np.logspace(np.log10(self.inner_radius), np.log10(self.outer_radius), 
+                            self.n_radial_bins + 1)
+        theta_edges = np.linspace(-np.pi, np.pi, self.n_angular_bins + 1)
+        
+        # Initialize descriptors
+        descriptors = np.zeros((n_points, self.n_radial_bins * self.n_angular_bins))
+        
+        # Compute histograms for each point
+        for i in range(n_points):
+            # Skip self-distances
+            mask = np.ones(n_points, dtype=bool)
+            mask[i] = False
+            
+            # Compute 2D histogram
+            hist, _, _ = np.histogram2d(
+                dists[i, mask],
+                angles[i, mask],
+                bins=[r_edges, theta_edges]
+            )
+            
+            # Normalize histogram
+            if hist.sum() > 0:
+                hist = hist / hist.sum()
+            
+            # Flatten histogram to 1D descriptor
+            descriptors[i] = hist.flatten()
+            
+        return descriptors
+        
     def extract_frames(self):
-        """Extract frames from video at 0.5 second intervals."""
+        """Extract frames from video at 1.0 second intervals."""
         cap = cv2.VideoCapture(str(self.video_path))
         fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_interval = int(fps * 0.5)  # Number of frames to skip for 0.5s interval
+        frame_interval = int(fps * 1.0)  # Number of frames to skip for 1.0s interval
         
         frame_count = 0
         while cap.isOpened():
@@ -47,8 +106,8 @@ class MarkerTracker:
         
     def compute_base_frame_mappings(self):
         """
-        Compute mappings between each frame and frame 0 using Coherent Point Drift (CPD).
-        Uses non-rigid registration to align markers and find correspondences.
+        Compute mappings between each frame and frame 0 using Shape Context Descriptors
+        and the Hungarian algorithm for optimal assignment.
         """
         base_markers = self.frame_markers[0]
         
@@ -61,24 +120,39 @@ class MarkerTracker:
                 continue
                 
             try:
-                # Apply CPD registration
-                reg = DeformableRegistration(X=base_markers, Y=current_markers)
-                reg.register()
-                registered_points = reg.transform_point_cloud(current_markers)
+                # Compute shape context descriptors
+                base_desc = self.compute_shape_context(base_markers)
+                current_desc = self.compute_shape_context(current_markers)
                 
-                # Find nearest neighbors for correspondence
-                tree = cKDTree(base_markers)
-                distances, indices = tree.query(registered_points, k=1)
+                # Compute cost matrix using Chi-squared distance between descriptors
+                desc_dist = np.zeros((len(current_markers), len(base_markers)))
+                for i in range(len(current_markers)):
+                    for j in range(len(base_markers)):
+                        # Chi-squared distance between histograms
+                        hist1, hist2 = current_desc[i], base_desc[j]
+                        desc_dist[i, j] = np.sum((hist1 - hist2) ** 2 / (hist1 + hist2 + 1e-10))
+                
+                # Compute spatial distances
+                spatial_dist = cdist(current_markers, base_markers)
+                spatial_dist = spatial_dist / spatial_dist.max()  # Normalize
+                
+                # Combine both distances with weights
+                cost_matrix = 0.7 * desc_dist + 0.3 * spatial_dist
+                
+                # Solve optimal assignment using Hungarian algorithm
+                row_ind, col_ind = linear_sum_assignment(cost_matrix)
                 
                 # Create mapping matrix with distances
                 mapping = np.full((len(current_markers), 2), np.nan)
-                for i, (dist, idx) in enumerate(zip(distances, indices)):
-                    mapping[i] = [idx, dist]
+                for i, j in zip(row_ind, col_ind):
+                    # Only keep matches if the cost is reasonable
+                    if cost_matrix[i, j] < 0.5:  # Threshold for accepting matches
+                        mapping[i] = [j, np.linalg.norm(current_markers[i] - base_markers[j])]
                         
                 self.base_frame_mappings.append(mapping)
                 
             except Exception as e:
-                print(f"Warning: CPD registration failed for frame {frame_idx}: {str(e)}")
+                print(f"Warning: Shape context matching failed for frame {frame_idx}: {str(e)}")
                 self.base_frame_mappings.append(np.full((len(current_markers), 2), np.nan))
                 
     def create_visualization(self):
@@ -121,7 +195,7 @@ class MarkerTracker:
         """Process the video file through all steps."""
         print("Extracting frames...")
         self.extract_frames()
-        print("Computing base frame mappings using CPD...")
+        print("Computing base frame mappings using Shape Context Descriptors...")
         self.compute_base_frame_mappings()
         print("Creating visualization...")
         self.create_visualization()
