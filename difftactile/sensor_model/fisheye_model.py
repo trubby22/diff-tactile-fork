@@ -51,16 +51,7 @@ def project_points_to_pix(a, f=8.627e-04, m=173913.04, cx=3.320e+02, cy=2.400e+0
     return p
 
 def get_marker_image(img):
-    curve1 = 50
-    curve2 = 100
-    mask = img<curve1
-    img1 = (curve2/curve1)*img
-    img2 = (255-(255-curve2)/(255-curve1)*(255-img))
-    img = img1*mask + img2*(1-mask)
-    img = img.astype('uint8')
-
     params = cv2.SimpleBlobDetector_Params()
-    params.minThreshold = 0
     params.minThreshold = 0
 
     detector = cv2.SimpleBlobDetector_create(params)
@@ -71,15 +62,23 @@ def get_marker_image(img):
         MarkerCenter.append([pt.pt[0], pt.pt[1]])
     MarkerCenter = np.array(MarkerCenter)
 
-    # filter out invalid markers
-    center_coordinates = np.array([320, 240])
-    w_length = 150
-    h_length = 100
-    start_point = (320-w_length,240-h_length)
-    end_point = (320+w_length,240+h_length)
-
-    offset = np.abs(MarkerCenter[:,0:2] - center_coordinates)
-    valid_marker_mask = np.logical_and(offset[:,0] < w_length, offset[:,1] < h_length)
-    MarkerCenter = MarkerCenter[valid_marker_mask]
-
     return MarkerCenter
+
+if __name__ == '__main__':
+    img = cv2.imread("./init.png")
+    marker_positions = get_marker_image(img)
+
+    # Create a copy of the image for visualization
+    vis_img = img.copy()
+    
+    # Draw detected markers
+    for pos in marker_positions:
+        # Convert positions to integers for drawing
+        center = (int(pos[0]), int(pos[1]))
+        # Draw a circle at each marker position (red color)
+        cv2.circle(vis_img, center, radius=5, color=(0, 0, 255), thickness=2)
+        
+    # Display the image with detected markers
+    cv2.imshow("Detected Markers", vis_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
