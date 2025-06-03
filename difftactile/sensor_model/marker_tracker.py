@@ -23,46 +23,13 @@ class MarkerTracker:
         self.frame_markers = []  # List to store markers for each frame
         self.base_frame_mappings = []  # List to store mappings to frame 0
         self.frames = []  # List to store actual frames
-        self.k_neighbors = 5  # Number of nearest neighbors for geometric descriptors
         
-    def compute_geometric_descriptors(self, points):
-        """
-        Compute geometric descriptors based on k-nearest neighbors distances.
-        
-        Args:
-            points (np.ndarray): Array of shape (N, 2) containing point coordinates
-            
-        Returns:
-            np.ndarray: Array of shape (N, k) containing sorted distances to k nearest neighbors
-        """
-        n_points = len(points)
-        if n_points < 2:
-            return np.zeros((n_points, self.k_neighbors))
-            
-        # Build KD-tree for efficient nearest neighbor search
-        tree = KDTree(points)
-        
-        # Compute distances to k+1 nearest neighbors (including self)
-        distances, _ = tree.query(points, k=min(self.k_neighbors + 1, n_points))
-        
-        # Remove self-distance (first column) and pad if necessary
-        if n_points <= self.k_neighbors + 1:
-            # Pad with max distance if we have fewer points than k_neighbors
-            descriptors = np.zeros((n_points, self.k_neighbors))
-            descriptors[:, :distances.shape[1]-1] = distances[:, 1:]
-            descriptors[:, distances.shape[1]-1:] = np.max(distances) * 1.5
-        else:
-            descriptors = distances[:, 1:self.k_neighbors+1]
-            
-        # Sort distances for each point to ensure invariance to point ordering
-        descriptors.sort(axis=1)
-        
-        # Normalize by max distance for scale invariance
-        max_dist = np.max(descriptors)
-        if max_dist > 0:
-            descriptors = descriptors / max_dist
-            
-        return descriptors
+        # LK optical flow parameters
+        self.lk_params = dict(
+            winSize=(15, 15),
+            maxLevel=4,
+            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
+        )
         
     def extract_frames(self):
         """Extract frames from video at 1.0 second intervals."""
@@ -80,7 +47,10 @@ class MarkerTracker:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 self.frames.append(frame)
                 markers = get_marker_image(gray)
-                self.frame_markers.append(markers)
+                if len(markers) > 0:  # Only append if markers were detected
+                    self.frame_markers.append(markers)
+                else:
+                    self.frame_markers.append(np.array([]))
                 
             frame_count += 1
             
@@ -88,50 +58,114 @@ class MarkerTracker:
         
     def compute_base_frame_mappings(self):
         """
-        Compute mappings between each frame and frame 0 using K-Nearest Neighbors
-        geometric descriptors and the Hungarian algorithm for optimal assignment.
+        Compute mappings between each frame and frame 0 using Lucas-Kanade optical flow
+        with drift correction using blob detection and Hungarian algorithm matching.
         """
-        base_markers = self.frame_markers[0]
-        
-        for frame_idx in range(1, len(self.frame_markers)):
-            current_markers = self.frame_markers[frame_idx]
+        if len(self.frames) < 2:
+            return
             
-            # Skip if either frame has no markers
-            if len(base_markers) == 0 or len(current_markers) == 0:
-                self.base_frame_mappings.append(np.full((len(current_markers), 2), np.nan))
-                continue
-                
+        base_markers = self.frame_markers[0]
+        if len(base_markers) == 0:
+            return
+            
+        # Initialize tracking state
+        prev_frame = cv2.cvtColor(self.frames[0], cv2.COLOR_BGR2GRAY)
+        prev_pts = base_markers.reshape(-1, 1, 2).astype(np.float32)
+        
+        # Initialize identity mapping for frame 0
+        identity_chain = [np.arange(len(base_markers))]  # Maps current indices to frame 0 indices
+        
+        for frame_idx in range(1, len(self.frames)):
             try:
-                # Compute geometric descriptors for both frames
-                base_desc = self.compute_geometric_descriptors(base_markers)
-                current_desc = self.compute_geometric_descriptors(current_markers)
+                curr_frame = cv2.cvtColor(self.frames[frame_idx], cv2.COLOR_BGR2GRAY)
+                curr_detected = self.frame_markers[frame_idx]
                 
-                # Compute descriptor distance matrix
-                desc_dist = np.linalg.norm(current_desc[:, None] - base_desc[None, :], axis=2)
+                # Handle empty detections
+                if len(curr_detected) == 0:
+                    print(f"No markers detected in frame {frame_idx}")
+                    self.base_frame_mappings.append(np.array([]))
+                    identity_chain.append(np.array([]))
+                    prev_pts = np.array([]).reshape(-1, 1, 2).astype(np.float32)
+                    prev_frame = curr_frame
+                    continue
                 
-                # Compute spatial distances and normalize
-                spatial_dist = cdist(current_markers, base_markers)
-                spatial_dist = spatial_dist / spatial_dist.max() if spatial_dist.max() > 0 else spatial_dist
+                # Ensure prev_pts is not empty and has correct shape
+                if prev_pts.size == 0 or prev_pts.shape[0] == 0:
+                    print(f"No previous points to track in frame {frame_idx}")
+                    self.base_frame_mappings.append(np.full((len(curr_detected), 2), np.nan))
+                    identity_chain.append(np.full(len(curr_detected), -1, dtype=int))
+                    prev_pts = curr_detected.reshape(-1, 1, 2).astype(np.float32)
+                    prev_frame = curr_frame
+                    continue
                 
-                # Combine geometric and spatial distances
-                cost_matrix = 0.7 * desc_dist + 0.3 * spatial_dist
+                # Track points using LK optical flow
+                curr_tracked, status, _ = cv2.calcOpticalFlowPyrLK(
+                    prev_frame, curr_frame, prev_pts, None, **self.lk_params
+                )
                 
-                # Solve optimal assignment using Hungarian algorithm
+                # Filter out points where tracking failed
+                good_tracked = curr_tracked[status.ravel() == 1]
+                good_prev_idx = np.where(status.ravel() == 1)[0]
+                
+                if len(good_tracked) == 0:
+                    print(f"No points successfully tracked in frame {frame_idx}")
+                    self.base_frame_mappings.append(np.full((len(curr_detected), 2), np.nan))
+                    identity_chain.append(np.full(len(curr_detected), -1, dtype=int))
+                    prev_pts = curr_detected.reshape(-1, 1, 2).astype(np.float32)
+                    prev_frame = curr_frame
+                    continue
+                
+                # Reshape tracked points to 2D array for distance calculation
+                good_tracked = good_tracked.reshape(-1, 2)
+                
+                # Match tracked points to detected points using Hungarian algorithm
+                cost_matrix = cdist(curr_detected, good_tracked)
+                
+                if cost_matrix.size == 0:
+                    print(f"Empty cost matrix in frame {frame_idx}")
+                    self.base_frame_mappings.append(np.full((len(curr_detected), 2), np.nan))
+                    identity_chain.append(np.full(len(curr_detected), -1, dtype=int))
+                    prev_pts = curr_detected.reshape(-1, 1, 2).astype(np.float32)
+                    prev_frame = curr_frame
+                    continue
+                
                 row_ind, col_ind = linear_sum_assignment(cost_matrix)
                 
-                # Create mapping matrix with distances
-                mapping = np.full((len(current_markers), 2), np.nan)
+                # Create mapping matrix
+                mapping = np.full((len(curr_detected), 2), np.nan)
+                new_identity = np.full(len(curr_detected), -1, dtype=int)
+                
                 for i, j in zip(row_ind, col_ind):
-                    # Only keep matches if the cost is reasonable
-                    if cost_matrix[i, j] < 0.5:  # Threshold for accepting matches
-                        mapping[i] = [j, np.linalg.norm(current_markers[i] - base_markers[j])]
-                        
+                    if cost_matrix[i, j] < 10:  # Only accept matches within reasonable distance
+                        # Map through the chain to get frame 0 index
+                        frame0_idx = identity_chain[-1][good_prev_idx[j]]
+                        if frame0_idx >= 0:  # Valid chain to frame 0
+                            mapping[i] = [frame0_idx, cost_matrix[i, j]]
+                            new_identity[i] = frame0_idx
+                
+                # Update tracking state
+                prev_frame = curr_frame.copy()
+                prev_pts = curr_detected[row_ind].reshape(-1, 1, 2).astype(np.float32)
+                
+                # Store results
                 self.base_frame_mappings.append(mapping)
+                identity_chain.append(new_identity)
                 
             except Exception as e:
-                print(f"Warning: Geometric matching failed for frame {frame_idx}: {str(e)}")
-                self.base_frame_mappings.append(np.full((len(current_markers), 2), np.nan))
+                print(f"Warning: Optical flow tracking failed for frame {frame_idx}")
+                print(f"Error details: {str(e)}")
+                print(f"Shape of prev_pts: {prev_pts.shape}")
+                print(f"Number of current detections: {len(curr_detected)}")
+                self.base_frame_mappings.append(np.full((len(self.frame_markers[frame_idx]), 2), np.nan))
+                identity_chain.append(np.array([]))
                 
+                # Reset tracking state
+                if len(curr_detected) > 0:
+                    prev_pts = curr_detected.reshape(-1, 1, 2).astype(np.float32)
+                else:
+                    prev_pts = np.array([]).reshape(-1, 1, 2).astype(np.float32)
+                prev_frame = curr_frame
+        
     def create_visualization(self):
         """Create visualization video with marker tracking."""
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -172,7 +206,7 @@ class MarkerTracker:
         """Process the video file through all steps."""
         print("Extracting frames...")
         self.extract_frames()
-        print("Computing base frame mappings using K-Nearest Neighbors geometric descriptors...")
+        print("Computing base frame mappings using Lucas-Kanade optical flow...")
         self.compute_base_frame_mappings()
         print("Creating visualization...")
         self.create_visualization()
