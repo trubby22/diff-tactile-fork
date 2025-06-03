@@ -198,7 +198,7 @@ class MarkerTracker:
                         end_point = tuple(map(int, self.frame_markers[frame_idx][i]))
                         cv2.arrowedLine(blended, start_point, end_point, (0, 0, 255), 2)
             
-            out.write(blended)
+            out.write(frame)
             
         out.release()
         
