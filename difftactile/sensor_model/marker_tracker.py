@@ -6,6 +6,7 @@ from fisheye_model import get_marker_image
 import tkinter as tk
 from PIL import Image, ImageTk
 from scipy.optimize import linear_sum_assignment
+from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 
 class MarkerTracker:
@@ -22,63 +23,44 @@ class MarkerTracker:
         self.frame_markers = []  # List to store markers for each frame
         self.base_frame_mappings = []  # List to store mappings to frame 0
         self.frames = []  # List to store actual frames
+        self.k_neighbors = 5  # Number of nearest neighbors for geometric descriptors
         
-        # Shape context parameters
-        self.n_angular_bins = 12
-        self.n_radial_bins = 5
-        self.inner_radius = 0.1
-        self.outer_radius = 2.0
-        
-    def compute_shape_context(self, points):
+    def compute_geometric_descriptors(self, points):
         """
-        Compute shape context descriptors for a set of points.
+        Compute geometric descriptors based on k-nearest neighbors distances.
         
         Args:
             points (np.ndarray): Array of shape (N, 2) containing point coordinates
             
         Returns:
-            np.ndarray: Array of shape (N, n_radial_bins * n_angular_bins) containing shape context descriptors
+            np.ndarray: Array of shape (N, k) containing sorted distances to k nearest neighbors
         """
         n_points = len(points)
         if n_points < 2:
-            return np.zeros((n_points, self.n_radial_bins * self.n_angular_bins))
+            return np.zeros((n_points, self.k_neighbors))
             
-        # Compute pairwise distances and angles
-        diff = points[:, np.newaxis, :] - points[np.newaxis, :, :]
-        dists = np.sqrt(np.sum(diff * diff, axis=2))
-        angles = np.arctan2(diff[:, :, 1], diff[:, :, 0])
+        # Build KD-tree for efficient nearest neighbor search
+        tree = KDTree(points)
         
-        # Normalize distances
-        mean_dist = np.mean(dists[dists > 0])
-        dists = dists / mean_dist
+        # Compute distances to k+1 nearest neighbors (including self)
+        distances, _ = tree.query(points, k=min(self.k_neighbors + 1, n_points))
         
-        # Create histogram bins
-        r_edges = np.logspace(np.log10(self.inner_radius), np.log10(self.outer_radius), 
-                            self.n_radial_bins + 1)
-        theta_edges = np.linspace(-np.pi, np.pi, self.n_angular_bins + 1)
-        
-        # Initialize descriptors
-        descriptors = np.zeros((n_points, self.n_radial_bins * self.n_angular_bins))
-        
-        # Compute histograms for each point
-        for i in range(n_points):
-            # Skip self-distances
-            mask = np.ones(n_points, dtype=bool)
-            mask[i] = False
+        # Remove self-distance (first column) and pad if necessary
+        if n_points <= self.k_neighbors + 1:
+            # Pad with max distance if we have fewer points than k_neighbors
+            descriptors = np.zeros((n_points, self.k_neighbors))
+            descriptors[:, :distances.shape[1]-1] = distances[:, 1:]
+            descriptors[:, distances.shape[1]-1:] = np.max(distances) * 1.5
+        else:
+            descriptors = distances[:, 1:self.k_neighbors+1]
             
-            # Compute 2D histogram
-            hist, _, _ = np.histogram2d(
-                dists[i, mask],
-                angles[i, mask],
-                bins=[r_edges, theta_edges]
-            )
-            
-            # Normalize histogram
-            if hist.sum() > 0:
-                hist = hist / hist.sum()
-            
-            # Flatten histogram to 1D descriptor
-            descriptors[i] = hist.flatten()
+        # Sort distances for each point to ensure invariance to point ordering
+        descriptors.sort(axis=1)
+        
+        # Normalize by max distance for scale invariance
+        max_dist = np.max(descriptors)
+        if max_dist > 0:
+            descriptors = descriptors / max_dist
             
         return descriptors
         
@@ -106,8 +88,8 @@ class MarkerTracker:
         
     def compute_base_frame_mappings(self):
         """
-        Compute mappings between each frame and frame 0 using Shape Context Descriptors
-        and the Hungarian algorithm for optimal assignment.
+        Compute mappings between each frame and frame 0 using K-Nearest Neighbors
+        geometric descriptors and the Hungarian algorithm for optimal assignment.
         """
         base_markers = self.frame_markers[0]
         
@@ -120,23 +102,18 @@ class MarkerTracker:
                 continue
                 
             try:
-                # Compute shape context descriptors
-                base_desc = self.compute_shape_context(base_markers)
-                current_desc = self.compute_shape_context(current_markers)
+                # Compute geometric descriptors for both frames
+                base_desc = self.compute_geometric_descriptors(base_markers)
+                current_desc = self.compute_geometric_descriptors(current_markers)
                 
-                # Compute cost matrix using Chi-squared distance between descriptors
-                desc_dist = np.zeros((len(current_markers), len(base_markers)))
-                for i in range(len(current_markers)):
-                    for j in range(len(base_markers)):
-                        # Chi-squared distance between histograms
-                        hist1, hist2 = current_desc[i], base_desc[j]
-                        desc_dist[i, j] = np.sum((hist1 - hist2) ** 2 / (hist1 + hist2 + 1e-10))
+                # Compute descriptor distance matrix
+                desc_dist = np.linalg.norm(current_desc[:, None] - base_desc[None, :], axis=2)
                 
-                # Compute spatial distances
+                # Compute spatial distances and normalize
                 spatial_dist = cdist(current_markers, base_markers)
-                spatial_dist = spatial_dist / spatial_dist.max()  # Normalize
+                spatial_dist = spatial_dist / spatial_dist.max() if spatial_dist.max() > 0 else spatial_dist
                 
-                # Combine both distances with weights
+                # Combine geometric and spatial distances
                 cost_matrix = 0.7 * desc_dist + 0.3 * spatial_dist
                 
                 # Solve optimal assignment using Hungarian algorithm
@@ -152,7 +129,7 @@ class MarkerTracker:
                 self.base_frame_mappings.append(mapping)
                 
             except Exception as e:
-                print(f"Warning: Shape context matching failed for frame {frame_idx}: {str(e)}")
+                print(f"Warning: Geometric matching failed for frame {frame_idx}: {str(e)}")
                 self.base_frame_mappings.append(np.full((len(current_markers), 2), np.nan))
                 
     def create_visualization(self):
@@ -195,7 +172,7 @@ class MarkerTracker:
         """Process the video file through all steps."""
         print("Extracting frames...")
         self.extract_frames()
-        print("Computing base frame mappings using Shape Context Descriptors...")
+        print("Computing base frame mappings using K-Nearest Neighbors geometric descriptors...")
         self.compute_base_frame_mappings()
         print("Creating visualization...")
         self.create_visualization()
