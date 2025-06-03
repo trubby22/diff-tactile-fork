@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from fisheye_model import get_marker_image
 import tkinter as tk
 from PIL import Image, ImageTk
+from pycpd import DeformableRegistration
+from scipy.spatial import cKDTree
 
 class MarkerTracker:
     def __init__(self, video_path, output_path=None):
@@ -18,7 +20,6 @@ class MarkerTracker:
         self.video_path = Path(video_path)
         self.output_path = Path(output_path) if output_path else self.video_path.parent / f"{self.video_path.stem}_tracked.mkv"
         self.frame_markers = []  # List to store markers for each frame
-        self.frame_mappings = []  # List to store mappings between consecutive frames
         self.base_frame_mappings = []  # List to store mappings to frame 0
         self.frames = []  # List to store actual frames
         
@@ -44,59 +45,42 @@ class MarkerTracker:
             
         cap.release()
         
-    def match_consecutive_frames(self):
-        """Match markers between consecutive frames."""
-        for i in range(len(self.frame_markers) - 1):
-            current_markers = self.frame_markers[i]
-            next_markers = self.frame_markers[i + 1]
-            
-            # Initialize mapping matrix with NaN
-            mapping = np.full((len(next_markers), 2), np.nan)
-            
-            # For each marker in next frame
-            for j, next_marker in enumerate(next_markers):
-                min_dist = float('inf')
-                best_match = None
-                
-                # Find closest marker in current frame
-                for k, current_marker in enumerate(current_markers):
-                    dist = np.linalg.norm(next_marker - current_marker)
-                    if dist < min_dist and dist <= 10:  # 10 pixel threshold
-                        min_dist = dist
-                        best_match = k
-                
-                if best_match is not None:
-                    mapping[j] = [best_match, min_dist]
-                    
-            self.frame_mappings.append(mapping)
-            
     def compute_base_frame_mappings(self):
-        """Compute mappings between each frame and frame 0."""
+        """
+        Compute mappings between each frame and frame 0 using Coherent Point Drift (CPD).
+        Uses non-rigid registration to align markers and find correspondences.
+        """
         base_markers = self.frame_markers[0]
         
         for frame_idx in range(1, len(self.frame_markers)):
-            # Initialize mapping with NaN
-            mapping = np.full((len(self.frame_markers[frame_idx]), 2), np.nan)
+            current_markers = self.frame_markers[frame_idx]
             
-            # Track each marker through the chain of mappings
-            for marker_idx in range(len(self.frame_markers[frame_idx])):
-                current_marker_idx = marker_idx
-                valid_chain = True
+            # Skip if either frame has no markers
+            if len(base_markers) == 0 or len(current_markers) == 0:
+                self.base_frame_mappings.append(np.full((len(current_markers), 2), np.nan))
+                continue
                 
-                # Follow the chain of mappings back to frame 0
-                for prev_frame_idx in range(frame_idx - 1, -1, -1):
-                    if np.isnan(self.frame_mappings[prev_frame_idx][current_marker_idx][0]):
-                        valid_chain = False
-                        break
-                    current_marker_idx = int(self.frame_mappings[prev_frame_idx][current_marker_idx][0])
+            try:
+                # Apply CPD registration
+                reg = DeformableRegistration(X=base_markers, Y=current_markers)
+                reg.register()
+                registered_points = reg.transform_point_cloud(current_markers)
                 
-                if valid_chain:
-                    mapping[marker_idx] = [current_marker_idx, 
-                                         np.linalg.norm(self.frame_markers[frame_idx][marker_idx] - 
-                                                      base_markers[current_marker_idx])]
-                    
-            self.base_frame_mappings.append(mapping)
-            
+                # Find nearest neighbors for correspondence
+                tree = cKDTree(base_markers)
+                distances, indices = tree.query(registered_points, k=1)
+                
+                # Create mapping matrix with distances
+                mapping = np.full((len(current_markers), 2), np.nan)
+                for i, (dist, idx) in enumerate(zip(distances, indices)):
+                    mapping[i] = [idx, dist]
+                        
+                self.base_frame_mappings.append(mapping)
+                
+            except Exception as e:
+                print(f"Warning: CPD registration failed for frame {frame_idx}: {str(e)}")
+                self.base_frame_mappings.append(np.full((len(current_markers), 2), np.nan))
+                
     def create_visualization(self):
         """Create visualization video with marker tracking."""
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -137,9 +121,7 @@ class MarkerTracker:
         """Process the video file through all steps."""
         print("Extracting frames...")
         self.extract_frames()
-        print("Matching consecutive frames...")
-        self.match_consecutive_frames()
-        print("Computing base frame mappings...")
+        print("Computing base frame mappings using CPD...")
         self.compute_base_frame_mappings()
         print("Creating visualization...")
         self.create_visualization()
@@ -232,7 +214,7 @@ def process_and_view_video(input_path, output_path=None):
 
 if __name__ == '__main__':
     path = '/Users/piotrblaszyk/Documents/university/MRIGI/individual-project-70007/diff-tactile-fork/difftactile/sensor_model'
-    # process_and_view_video(f'{path}/system-id-screws-3-reps.mkv', f'{path}/marker-tracker.mkv')
+    process_and_view_video(f'{path}/system-id-screws-3-reps.mkv', f'{path}/marker-tracker.mkv')
 
-    player = VideoPlayer(f'{path}/marker-tracker.mkv')
-    player.run()
+    # player = VideoPlayer(f'{path}/marker-tracker.mkv')
+    # player.run()
