@@ -8,6 +8,7 @@ from PIL import Image, ImageTk
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
+import json
 
 class MarkerTracker:
     def __init__(self, video_path, output_path=None):
@@ -16,7 +17,7 @@ class MarkerTracker:
         
         Args:
             video_path (str): Path to the input video file
-            output_path (str, optional): Path for the output video file
+            output_path (str, optional): Path for output video file
         """
         self.video_path = Path(video_path)
         self.output_path = Path(output_path) if output_path else self.video_path.parent / f"{self.video_path.stem}_tracked.mkv"
@@ -31,13 +32,29 @@ class MarkerTracker:
             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
         )
         
-    def extract_frames(self):
-        """Extract frames from video at 1.0 second intervals."""
+    def extract_frames(self, calculate_markers=True):
+        """
+        Extract frames from video at 1.0 second intervals.
+        
+        Args:
+            calculate_markers (bool): If True, calculate markers from frames. If False, load from json file.
+        """
+        json_path = self.video_path.parent / f"{self.video_path.stem}_markers.json"
+        manual_annotations_path = self.video_path.parent / "manual-annotations.json"
+        
+        # Load manual annotations if they exist
+        manual_annotations = {}
+        if manual_annotations_path.exists():
+            with open(manual_annotations_path, 'r') as f:
+                manual_annotations = json.load(f)
+                print(f"Loaded manual annotations from {manual_annotations_path}")
+        
         cap = cv2.VideoCapture(str(self.video_path))
         fps = cap.get(cv2.CAP_PROP_FPS)
         frame_interval = int(fps * 1.0)  # Number of frames to skip for 1.0s interval
         
         frame_count = 0
+        frame_idx = 0  # Keep track of processed frame index
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -47,14 +64,49 @@ class MarkerTracker:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 self.frames.append(frame)
                 markers = get_marker_image(gray)
+                
                 if len(markers) > 0:  # Only append if markers were detected
                     self.frame_markers.append(markers)
                 else:
                     self.frame_markers.append(np.array([]))
+                    
+                frame_idx += 1
                 
             frame_count += 1
             
         cap.release()
+        
+        if not calculate_markers:
+            if json_path.exists():
+                with open(json_path, 'r') as f:
+                    markers_list = json.load(f)
+                    # Convert the loaded list back to numpy arrays
+                    self.frame_markers = [np.array(markers) for markers in markers_list]
+                                
+                    print(f"Loaded markers from {json_path}")
+                return
+            else:
+                print(f"Warning: {json_path} not found")
+        
+        if True:
+            # Convert numpy arrays to lists for JSON serialization
+            markers_list = [markers.tolist() if markers.size > 0 else [] for markers in self.frame_markers]
+            # Save markers to json file
+            with open(json_path, 'w') as f:
+                json.dump(markers_list, f)
+                print(f"Saved markers to {json_path}")
+
+        # Add manual annotations to loaded markers
+        for frame_idx in manual_annotations:
+            idx = int(frame_idx)
+            if idx < len(self.frame_markers):
+                manual_points = np.array(manual_annotations[frame_idx])
+                if len(self.frame_markers[idx]) > 0:
+                    self.frame_markers[idx] = np.vstack((self.frame_markers[idx], manual_points))
+                else:
+                    self.frame_markers[idx] = manual_points
+        
+        print(f"Added manual annotations")
         
     def compute_base_frame_mappings(self):
         """
@@ -221,6 +273,9 @@ class VideoPlayer:
         self.current_frame = 0
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
+        # Store clicked points
+        self.manual_annotations = {}  # frame_idx -> list of [x, y] coordinates
+        
         # Create GUI
         self.root = tk.Tk()
         self.root.title("Marker Tracking Viewer")
@@ -237,6 +292,10 @@ class VideoPlayer:
         self.root.bind('<Left>', self.prev_frame)
         self.root.bind('<Right>', self.next_frame)
         self.root.bind('<Escape>', self.quit)
+        self.root.bind('y', self.save_annotations)  # Add binding for 'y' key
+        
+        # Bind mouse click event
+        self.canvas.bind('<Button-1>', self.on_click)
         
         # Show first frame
         self.show_frame()
@@ -275,7 +334,47 @@ class VideoPlayer:
     def quit(self, event):
         """Close the video player."""
         self.root.quit()
+    
+    def on_click(self, event):
+        """Handle mouse click event."""
+        x, y = event.x, event.y
+        print(f"Frame: {self.current_frame}, Clicked coordinates: ({x}, {y})")
         
+        # Store the clicked coordinates
+        if self.current_frame not in self.manual_annotations:
+            self.manual_annotations[self.current_frame] = []
+        self.manual_annotations[self.current_frame].append([x, y])
+    
+    def save_annotations(self, event):
+        """Save manual annotations to a JSON file, merging with existing annotations if present."""
+        # Convert frame indices from int to str for JSON serialization
+        annotations_dict = {str(k): v for k, v in self.manual_annotations.items()}
+        
+        json_path = Path(self.video_path).parent / "manual-annotations.json"
+        
+        # Load existing annotations if they exist
+        existing_annotations = {}
+        if json_path.exists():
+            with open(json_path, 'r') as f:
+                existing_annotations = json.load(f)
+                print(f"Loaded existing annotations from {json_path}")
+        
+        # Merge existing annotations with new ones
+        # For each frame in new annotations, append the new points to existing points or create new entry
+        for frame_idx, points in annotations_dict.items():
+            if frame_idx in existing_annotations:
+                existing_annotations[frame_idx].extend(points)
+            else:
+                existing_annotations[frame_idx] = points
+        
+        # Save merged annotations back to file
+        with open(json_path, 'w') as f:
+            json.dump(existing_annotations, f)
+        print(f"Saved merged annotations to {json_path}")
+        
+        # Clear current annotations after saving
+        self.manual_annotations = {}
+    
     def run(self):
         """Start the video player."""
         self.root.mainloop()
