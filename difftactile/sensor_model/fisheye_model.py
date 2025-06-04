@@ -54,36 +54,41 @@ def get_marker_image(img):
     params = cv2.SimpleBlobDetector_Params()
     
     # Basic thresholding parameters
-    params.minThreshold = 0
-    params.maxThreshold = 255
-    params.thresholdStep = 5  # Smaller steps to catch more variations
+    # params.minThreshold = 0
+    # params.maxThreshold = 255
+    # params.thresholdStep = 1  # Smaller steps to catch more variations
+
+    # params.filterByArea = False
+    # params.filterByCircularity = False
+    # params.filterByConvexity = False # set this one to False, all other filters should have their default values
+    # params.filterByInertia = False
     
-    # Filter by Area
-    params.filterByArea = True
-    params.minArea = 20  # Smaller minimum area to catch low contrast markers
-    params.maxArea = 500  # Larger maximum area to account for potential blur
+    # # Filter by Area
+    # params.filterByArea = True
+    # params.minArea = 20  # Smaller minimum area to catch low contrast markers
+    # params.maxArea = 500  # Larger maximum area to account for potential blur
     
-    # Filter by Circularity
-    params.filterByCircularity = True
-    params.minCircularity = 0.1  # More permissive circularity to catch donut shapes
+    # # Filter by Circularity
+    # params.filterByCircularity = True
+    # params.minCircularity = 0.1  # More permissive circularity to catch donut shapes
     
-    # Filter by Convexity
-    params.filterByConvexity = True
-    params.minConvexity = 0.1  # More permissive convexity
+    # # Filter by Convexity
+    # params.filterByConvexity = True
+    # params.minConvexity = 1 - 1 / (2 ** 4)  # More permissive convexity
     
-    # Filter by Inertia (elongation)
-    params.filterByInertia = True
-    params.minInertiaRatio = 0.01  # More permissive ratio to catch distorted shapes
+    # # Filter by Inertia (elongation)
+    # params.filterByInertia = True
+    # params.minInertiaRatio = 0.01  # More permissive ratio to catch distorted shapes
     
-    # Crucial for donut detection: allow dark blobs on light background
-    params.blobColor = 0
+    # # Crucial for donut detection: allow dark blobs on light background
+    # params.blobColor = 0
 
     detector = cv2.SimpleBlobDetector_create(params)
     keypoints = detector.detect(img)
 
     # Circle parameters
     circle_center = np.array([359, 266])
-    circle_radius = 189
+    circle_radius = 180
 
     MarkerCenter = []
     for pt in keypoints:
@@ -98,7 +103,7 @@ def get_marker_image(img):
     return MarkerCenter
 
 if __name__ == '__main__':
-    img = cv2.imread("./init.png")
+    img = cv2.imread("./system-id-screws-3-reps-0001.png")
     marker_positions = get_marker_image(img)
 
     # Create a copy of the image for visualization

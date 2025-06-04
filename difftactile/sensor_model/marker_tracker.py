@@ -61,6 +61,7 @@ class MarkerTracker:
         Compute mappings between each frame and frame 0 using Lucas-Kanade optical flow
         with drift correction using blob detection and Hungarian algorithm matching.
         """
+        pass
         if len(self.frames) < 2:
             return
             
