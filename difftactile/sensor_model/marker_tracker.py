@@ -164,45 +164,60 @@ class MarkerTracker:
                     
             self.base_frame_mappings.append(mapping)
         
-    def create_visualization(self):
-        """Create visualization video with marker tracking."""
+    def create_visualization(self, show_adjacent=False):
+        """Create visualization video with marker tracking.
+        Args:
+            show_adjacent (bool): If True, visualize adjacent frames (n-1 and n). If False, visualize base frame and frame n.
+        """
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         first_frame = self.frames[0]
         out = cv2.VideoWriter(str(self.output_path), fourcc, 2.0, 
                             (first_frame.shape[1], first_frame.shape[0]))
         
-        # Process each frame
         for frame_idx in range(len(self.frames)):
             frame = self.frames[frame_idx].copy()
-            
+
             # Draw current frame markers in green
             for marker in self.frame_markers[frame_idx]:
                 cv2.circle(frame, tuple(map(int, marker)), 5, (0, 255, 0), -1)
-            
-            # For all frames except the first one, show previous frame and displacement
-            if frame_idx > 0:
-                prev_frame = self.frames[frame_idx - 1].copy()
-                
-                # Draw previous frame markers in blue
-                for marker in self.frame_markers[frame_idx - 1]:
-                    cv2.circle(prev_frame, tuple(map(int, marker)), 5, (255, 0, 0), -1)
-                
-                # Create blended image
-                blended = cv2.addWeighted(frame, 0.7, prev_frame, 0.3, 0)
-                
-                # Draw displacement arrows between consecutive frames
-                mapping = self.frame_mappings[frame_idx - 1]
-                for i, map_entry in enumerate(mapping):
-                    if not np.isnan(map_entry[0]):
-                        start_point = tuple(map(int, self.frame_markers[frame_idx - 1][int(map_entry[0])]))
-                        end_point = tuple(map(int, self.frame_markers[frame_idx][i]))
-                        cv2.arrowedLine(blended, start_point, end_point, (0, 0, 255), 2)
-                
-                out.write(blended)
+
+            if show_adjacent:
+                # Visualize adjacent frames (n-1 and n)
+                if frame_idx > 0:
+                    prev_frame = self.frames[frame_idx - 1].copy()
+                    # Draw previous frame markers in blue
+                    for marker in self.frame_markers[frame_idx - 1]:
+                        cv2.circle(prev_frame, tuple(map(int, marker)), 5, (255, 0, 0), -1)
+                    # Create blended image
+                    blended = cv2.addWeighted(frame, 0.7, prev_frame, 0.3, 0)
+                    # Draw displacement arrows between consecutive frames
+                    mapping = self.frame_mappings[frame_idx - 1]
+                    for i, map_entry in enumerate(mapping):
+                        if not np.isnan(map_entry[0]):
+                            start_point = tuple(map(int, self.frame_markers[frame_idx - 1][int(map_entry[0])]))
+                            end_point = tuple(map(int, self.frame_markers[frame_idx][i]))
+                            cv2.arrowedLine(blended, start_point, end_point, (0, 0, 255), 2)
+                    out.write(blended)
+                else:
+                    # For the first frame, just write the frame with its markers
+                    out.write(frame)
             else:
-                # For the first frame, just write the frame with its markers
-                out.write(frame)
-            
+                # Visualize base frame and frame n
+                base_frame = self.frames[0].copy()
+                # Draw base frame markers in blue
+                for marker in self.frame_markers[0]:
+                    cv2.circle(base_frame, tuple(map(int, marker)), 5, (255, 0, 0), -1)
+                # Create blended image
+                blended = cv2.addWeighted(frame, 0.7, base_frame, 0.3, 0)
+                # Draw displacement arrows from base frame to current frame
+                if frame_idx > 0:
+                    mapping = self.base_frame_mappings[frame_idx - 1]
+                    for i, map_entry in enumerate(mapping):
+                        if not np.isnan(map_entry[0]):
+                            start_point = tuple(map(int, self.frame_markers[0][int(map_entry[0])]))
+                            end_point = tuple(map(int, self.frame_markers[frame_idx][i]))
+                            cv2.arrowedLine(blended, start_point, end_point, (0, 0, 255), 2)
+                out.write(blended)
         out.release()
         
     def process_video(self):
