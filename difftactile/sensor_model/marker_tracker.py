@@ -317,7 +317,8 @@ class VideoPlayer:
         self.root.bind('<Left>', self.prev_frame)
         self.root.bind('<Right>', self.next_frame)
         self.root.bind('<Escape>', self.quit)
-        self.root.bind('y', self.save_annotations)  # Add binding for 'y' key
+        if False:
+            self.root.bind('y', self.save_annotations)  # Add binding for 'y' key
         
         # Bind mouse click event
         self.canvas.bind('<Button-1>', self.on_click)
