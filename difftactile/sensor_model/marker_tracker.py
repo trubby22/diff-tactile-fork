@@ -9,6 +9,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 import json
+import pickle
 
 class MarkerTracker:
     def __init__(self, video_path, output_path=None):
@@ -174,15 +175,14 @@ class MarkerTracker:
         out = cv2.VideoWriter(str(self.output_path), fourcc, 2.0, 
                             (first_frame.shape[1], first_frame.shape[0]))
         
-        for frame_idx in range(len(self.frames)):
-            frame = self.frames[frame_idx].copy()
+        if show_adjacent:
+            for frame_idx in range(len(self.frames)):
+                frame = self.frames[frame_idx].copy()
 
-            # Draw current frame markers in green
-            for marker in self.frame_markers[frame_idx]:
-                cv2.circle(frame, tuple(map(int, marker)), 5, (0, 255, 0), -1)
+                # Draw current frame markers in green
+                for marker in self.frame_markers[frame_idx]:
+                    cv2.circle(frame, tuple(map(int, marker)), 5, (0, 255, 0), -1)
 
-            if show_adjacent:
-                # Visualize adjacent frames (n-1 and n)
                 if frame_idx > 0:
                     prev_frame = self.frames[frame_idx - 1].copy()
                     # Draw previous frame markers in blue
@@ -201,25 +201,81 @@ class MarkerTracker:
                 else:
                     # For the first frame, just write the frame with its markers
                     out.write(frame)
-            else:
-                # Visualize base frame and frame n
+        else:
+            # Load the paired markers data
+            with open("./markers-paired.pkl", 'rb') as f:
+                markers_array = pickle.load(f)
+            
+            for frame_idx in range(len(self.frames)):
+                frame = self.frames[frame_idx].copy()
                 base_frame = self.frames[0].copy()
-                # Draw base frame markers in blue
-                for marker in self.frame_markers[0]:
-                    cv2.circle(base_frame, tuple(map(int, marker)), 5, (255, 0, 0), -1)
+                
+                # Draw base frame markers in blue with indices
+                for marker_idx, marker in enumerate(markers_array[0]):
+                    point = tuple(map(int, marker))
+                    cv2.circle(base_frame, point, 5, (255, 0, 0), -1)
+                    cv2.putText(base_frame, str(marker_idx), 
+                              (point[0] + 10, point[1]), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+                
+                # Draw current frame markers in green with indices
+                for marker_idx, marker in enumerate(markers_array[frame_idx]):
+                    point = tuple(map(int, marker))
+                    cv2.circle(frame, point, 5, (0, 255, 0), -1)
+                    cv2.putText(frame, str(marker_idx), 
+                              (point[0] + 10, point[1]), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                
                 # Create blended image
                 blended = cv2.addWeighted(frame, 0.7, base_frame, 0.3, 0)
+                
                 # Draw displacement arrows from base frame to current frame
                 if frame_idx > 0:
-                    mapping = self.base_frame_mappings[frame_idx - 1]
-                    for i, map_entry in enumerate(mapping):
-                        if not np.isnan(map_entry[0]):
-                            start_point = tuple(map(int, self.frame_markers[0][int(map_entry[0])]))
-                            end_point = tuple(map(int, self.frame_markers[frame_idx][i]))
-                            cv2.arrowedLine(blended, start_point, end_point, (0, 0, 255), 2)
+                    for marker_idx in range(len(markers_array[0])):
+                        start_point = tuple(map(int, markers_array[0][marker_idx]))
+                        end_point = tuple(map(int, markers_array[frame_idx][marker_idx]))
+                        cv2.arrowedLine(blended, start_point, end_point, (0, 0, 255), 2)
+                
                 out.write(blended)
+        
         out.release()
         
+    def save_paired_markers_to_file(self):
+        """
+        Saves the paired marker coordinates to a pickle file.
+        The data is transformed into a 3D numpy array with shape (num_frames, num_markers_per_frame, 2).
+        The markers in frames 1 to n are reordered to match the order of markers in the base frame.
+        """
+        num_frames = len(self.frame_markers)
+        num_markers = len(self.frame_markers[0])  # Number of markers in base frame
+        
+        # Initialize the 3D array
+        markers_array = np.zeros((num_frames, num_markers, 2), dtype=np.float32)
+        
+        # Fill base frame (frame 0) markers directly
+        markers_array[0] = self.frame_markers[0]
+        
+        # For each subsequent frame, reorder markers based on base frame mapping
+        for frame_idx in range(1, num_frames):
+            current_frame_markers = self.frame_markers[frame_idx]
+            base_mapping = self.base_frame_mappings[frame_idx - 1]  # -1 because base_frame_mappings starts from frame 1
+            
+            # Create reordered markers array for this frame
+            reordered_markers = np.zeros((num_markers, 2), dtype=np.float32)
+            
+            # For each marker in the current frame
+            for current_idx, map_entry in enumerate(base_mapping):
+                if not np.isnan(map_entry[0]):
+                    base_frame_idx = int(map_entry[0])
+                    # Place the current marker in the position corresponding to its base frame match
+                    reordered_markers[base_frame_idx] = current_frame_markers[current_idx]
+            
+            markers_array[frame_idx] = reordered_markers
+        
+        # Save to pickle file
+        with open("./markers-paired.pkl", 'wb') as f:
+            pickle.dump(markers_array, f)
+
     def process_video(self):
         """Process the video file through all steps."""
         print("Extracting frames...")
@@ -228,10 +284,12 @@ class MarkerTracker:
         self.match_consecutive_frames()
         print("Computing base frame mappings using Lucas-Kanade optical flow...")
         self.compute_base_frame_mappings()
+        print("Saving markers to file")
+        self.save_paired_markers_to_file()
         print("Creating visualization...")
         self.create_visualization()
         print("Processing complete!")
-        
+
 class VideoPlayer:
     def __init__(self, video_path):
         """Initialize video player with the given video path."""
