@@ -11,7 +11,29 @@ enable_gui3 = True
 
 class ContactVisualisation:
     def __init__(self):
-        pass
+        self.space_scale = 10.0
+        self.obj_scale = 4.0
+        self.dim = 3
+
+        self.view_phi = 0
+        self.view_theta = 0
+        self.view_scale = 10.0
+        self.table_scale = 2.0
+        self.table_height = 0.0
+
+    def init_visualisation(self):
+        self.draw_pos2 = ti.Vector.field(2, float, self.fem_sensor1.n_verts)
+        self.draw_pos3 = ti.Vector.field(2, float, self.mpm_object.n_particles)
+        self.draw_tableline = ti.Vector.field(3, dtype=float, shape=(2 * 4))
+        self.draw_pos_3d = ti.Vector.field(
+            3, dtype=float, shape=(self.mpm_object.n_particles)
+        )
+        self.draw_fem1_3d = ti.Vector.field(
+            3, dtype=float, shape=(self.fem_sensor1.n_verts)
+        )
+        self.color_fem1_3d = ti.Vector.field(
+            3, dtype=float, shape=(self.fem_sensor1.n_verts)
+        )
 
     def draw_markers(self, init_markers, cur_markers, gui):
         img_height = 480

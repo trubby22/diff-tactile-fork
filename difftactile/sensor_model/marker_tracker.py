@@ -6,7 +6,6 @@ from fisheye_model import get_marker_image
 import tkinter as tk
 from PIL import Image, ImageTk
 from scipy.optimize import linear_sum_assignment
-from scipy.spatial import KDTree
 from scipy.spatial.distance import cdist
 import json
 import pickle

@@ -1,9 +1,17 @@
-from difftactile.tasks.tumour_phantom_visualisation import ContactVisualisation, set_up_gui, update_gui
+from difftactile.tasks.tumour_phantom_visualisation import (
+    ContactVisualisation,
+    set_up_gui,
+    update_gui,
+)
 from difftactile.sensor_model.fem_sensor import FEMDomeSensor
 from difftactile.object_model.mpm_elastic import MPMObj
 
 import taichi as ti
 import numpy as np
+import pickle
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cdist
 
 off_screen = False
 enable_gui1 = True
@@ -12,26 +20,29 @@ enable_gui3 = True
 USE_TACTILE = True
 USE_STATE = True
 
+
 @ti.data_oriented
 class Contact(ContactVisualisation):
     def __init__(
-        self, use_tactile=True, use_state=True, dt=5e-5, total_steps=300, sub_steps=50, obj=None
+        self,
+        use_tactile=True,
+        use_state=True,
+        dt=5e-5,
+        num_frames=300,
+        num_sub_frames=50,
+        obj=None,
     ):
         super().__init__()
 
         self.dt = dt
-        self.total_steps = total_steps
-        self.sub_steps = sub_steps
-        self.fem_sensor1 = FEMDomeSensor(dt, sub_steps)
+        self.num_frames = num_frames
+        self.num_sub_frames = num_sub_frames
+        self.fem_sensor1 = FEMDomeSensor(dt, num_sub_frames)
         self.use_tactile = use_tactile
         self.use_state = use_state
-        self.space_scale = 10.0
-        self.obj_scale = 4.0
-        self.dim = 3
-        self.table_height = 0.0
         self.mpm_object = MPMObj(
             dt=dt,
-            sub_steps=sub_steps,
+            num_sub_frames=num_sub_frames,
             obj_name=obj,
             space_scale=self.space_scale,
             obj_scale=self.obj_scale,
@@ -44,10 +55,6 @@ class Contact(ContactVisualisation):
         self.beta[None] = 5e-12
         self.num_sensor = 1
         self.init()
-        self.view_phi = 0
-        self.view_theta = 0
-        self.view_scale = 10.0
-        self.table_scale = 2.0
         self.kn = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kd = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kt = ti.field(dtype=float, shape=(), needs_grad=True)
@@ -62,42 +69,30 @@ class Contact(ContactVisualisation):
             self.num_sensor,
             dtype=int,
             shape=(
-                self.sub_steps,
+                self.num_sub_frames,
                 self.mpm_object.n_grid,
                 self.mpm_object.n_grid,
                 self.mpm_object.n_grid,
             ),
         )
-        self.dim = 3
         self.p_sensor1 = ti.Vector.field(
-            self.dim, dtype=ti.f32, shape=(self.total_steps), needs_grad=True
+            self.dim, dtype=ti.f32, shape=(self.num_frames), needs_grad=True
         )
         self.o_sensor1 = ti.Vector.field(
-            self.dim, dtype=ti.f32, shape=(self.total_steps), needs_grad=True
+            self.dim, dtype=ti.f32, shape=(self.num_frames), needs_grad=True
         )
         self.loss = ti.field(float, (), needs_grad=True)
-        self.angle = ti.field(float, (self.total_steps), needs_grad=True)
+        self.angle = ti.field(float, (self.num_frames), needs_grad=True)
         self.contact_detect_flag = ti.field(float, (), needs_grad=True)
         self.predict_force1 = ti.Vector.field(self.dim, float, (), needs_grad=True)
         self.contact_force1 = ti.Vector.field(self.dim, float, (), needs_grad=True)
-        self.draw_pos2 = ti.Vector.field(2, float, self.fem_sensor1.n_verts)
-        self.draw_pos3 = ti.Vector.field(2, float, self.mpm_object.n_particles)
-        self.draw_tableline = ti.Vector.field(3, dtype=float, shape=(2 * 4))
-        self.draw_pos_3d = ti.Vector.field(
-            3, dtype=float, shape=(self.mpm_object.n_particles)
-        )
-        self.draw_fem1_3d = ti.Vector.field(
-            3, dtype=float, shape=(self.fem_sensor1.n_verts)
-        )
-        self.color_fem1_3d = ti.Vector.field(
-            3, dtype=float, shape=(self.fem_sensor1.n_verts)
-        )
+        self.init_visualisation()
         self.norm_eps = 1e-11
-        self.target_force1 = ti.Vector.field(self.dim, float, shape=())
-        self.target_angle = ti.field(float, ())
-        self.angle_x = ti.field(float, ())
-        self.angle_y = ti.field(float, ())
-        self.angle_z = ti.field(float, ())
+
+        self.set_up_target_marker_positions()
+
+        self.init_visualisation()
+        self.norm_eps = 1e-11
 
     def init(self):
         x = 3.0
@@ -130,7 +125,7 @@ class Contact(ContactVisualisation):
         for i in range(0, init_steps):
             self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
-        
+
         if True:
             vx1 = 0.0
             vy1 = 1.5 * sf
@@ -138,7 +133,7 @@ class Contact(ContactVisualisation):
             rx1 = 0.0
             ry1 = 0.0
             rz1 = 0.0
-            for i in range(init_steps, self.total_steps):
+            for i in range(init_steps, self.num_frames):
                 self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
                 self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
@@ -188,9 +183,6 @@ class Contact(ContactVisualisation):
         self.loss.grad[None] = 1.0
         self.p_sensor1.grad.fill(0.0)
         self.o_sensor1.grad.fill(0.0)
-        self.angle_x[None] = 0.0
-        self.angle_y[None] = 0.0
-        self.angle_z[None] = 0.0
 
     def clear_traj_grad(self):
         self.fem_sensor1.clear_loss_grad()
@@ -199,8 +191,8 @@ class Contact(ContactVisualisation):
 
     def clear_all_grad(self):
         self.clear_traj_grad()
-        self.fem_sensor1.clear_step_grad(self.sub_steps)
-        self.mpm_object.clear_step_grad(self.sub_steps)
+        self.fem_sensor1.clear_step_grad(self.num_sub_frames)
+        self.mpm_object.clear_step_grad(self.num_sub_frames)
 
     def reset(self):
         self.fem_sensor1.reset_contact()
@@ -225,7 +217,7 @@ class Contact(ContactVisualisation):
             self.fem_sensor1.vel.grad[f, i] = ti.math.clamp(
                 self.fem_sensor1.vel.grad[f, i], -1000.0, 1000.0
             )
-    
+
     @ti.kernel
     def compute_contact_force(self, f: ti.i32):
         for i in range(self.fem_sensor1.num_triangles):
@@ -238,21 +230,7 @@ class Contact(ContactVisualisation):
             )
             self.contact_force1[None] += (
                 1 / 6 * self.fem_sensor1.external_force_field[f, c]
-            )        
-
-    @ti.kernel
-    def compute_force_loss(self):
-        self.predict_force1[None] = (
-            self.fem_sensor1.inv_rot[None] @ self.contact_force1[None]
-        )
-        self.loss[None] += self.beta[None] * (
-            (self.predict_force1[None][1] - self.target_force1[None][1]) ** 2
-            + (self.predict_force1[None][0] - self.target_force1[None][0]) ** 2
-        )
-
-    def load_target(self):
-        self.target_force1[None] = ti.Vector([-25_000.0, -1_000.0, 0.0])
-        self.target_angle[None] = 0.3
+            )
 
     @ti.func
     def calculate_contact_force(self, sdf, norm_v, relative_v):
@@ -330,7 +308,7 @@ class Contact(ContactVisualisation):
 
     @ti.kernel
     def compute_angle(self, t: ti.i32):
-        for f in range(self.sub_steps - 1):
+        for f in range(self.num_sub_frames - 1):
             if f == 0:
                 self.angle[t + 1] = self.angle[t] + ti.atan2(
                     self.mpm_object.R[f][1, 0], self.mpm_object.R[f][1, 1]
@@ -339,14 +317,73 @@ class Contact(ContactVisualisation):
                 self.angle[t + 1] += ti.atan2(
                     self.mpm_object.R[f][1, 0], self.mpm_object.R[f][1, 1]
                 )
+    
+    def set_up_target_marker_positions(self):
+        """
+        Reorders the experimental marker positions to match the simulation marker indexing convention.
+        Uses the Hungarian algorithm to find optimal marker-to-marker mapping based on squared Euclidean distances
+        between markers in the base frame (frame 0).
+        """
+        # Load target marker positions from pickle file
+        with open('difftactile/sensor_model/markers-paired.pkl', 'rb') as f:
+            marker_data = pickle.load(f)
+        # Create taichi field with appropriate shape
+        self.target_marker_positions = ti.Vector.field(marker_data.shape[2], dtype=ti.f32, shape=(marker_data.shape[0], marker_data.shape[1]))
+        # Copy data from numpy array to taichi field
+        self.target_marker_positions.from_numpy(marker_data)
+
+        # Get base frame markers from experiment and simulation
+        exp_base_markers = self.target_marker_positions[0]  # Shape: (num_markers, 2)
+        sim_base_markers = self.fem_sensor1.virtual_markers.to_numpy()  # Shape: (num_markers, 2)
+
+        # Compute cost matrix (squared Euclidean distances)
+        cost_matrix = cdist(exp_base_markers, sim_base_markers, metric='sqeuclidean')
+
+        # Use Hungarian algorithm to find optimal assignment minimizing sum of squared distances
+        exp_indices, sim_indices = linear_sum_assignment(cost_matrix)
+
+        # Create a mapping from experimental indices to simulation indices
+        index_mapping = {exp_idx: sim_idx for exp_idx, sim_idx in zip(exp_indices, sim_indices)}
+
+        # Create a new array with reordered experimental markers
+        num_frames = self.target_marker_positions.shape[0]
+        num_markers = self.target_marker_positions.shape[1]
+        reordered_markers = np.zeros_like(self.target_marker_positions)
+
+        # For each frame, reorder the markers according to the mapping
+        for frame_idx in range(num_frames):
+            for exp_idx, sim_idx in index_mapping.items():
+                reordered_markers[frame_idx, sim_idx] = self.target_marker_positions[frame_idx, exp_idx]
+
+        # Update target_marker_positions with reordered markers
+        self.target_marker_positions = reordered_markers 
 
     @ti.kernel
-    def compute_angle_loss(self, t: ti.i32):
-        self.loss[None] += (
-            self.alpha[None]
-            * (self.angle[t] - self.target_angle[None])
-            * (self.angle[t] - self.target_angle[None])
-        )
+    def compute_marker_loss(self, frame_index: ti.i32):
+        """
+        Compute RMSE loss between experimental and simulated marker positions for a given frame.
+        
+        Args:
+            frame_index: Index of the frame to compute loss for
+        """
+        squared_error_sum = 0.0
+        
+        # Iterate through all markers and accumulate squared errors
+        for i in range(self.fem_sensor1.num_markers):
+            # Get experimental and simulated marker positions
+            exp_marker = self.target_marker_positions[frame_index, i]
+            sim_marker = self.fem_sensor1.virtual_markers[i]
+            
+            # Compute squared error for this marker pair
+            dx = exp_marker[0] - sim_marker[0]
+            dy = exp_marker[1] - sim_marker[1]
+            squared_error = dx * dx + dy * dy
+            squared_error_sum += squared_error
+            
+        # Compute RMSE and add to total loss
+        rmse = ti.sqrt(squared_error_sum / self.fem_sensor1.num_markers)
+        self.loss[None] += rmse
+
 
 def main():
     ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
@@ -354,79 +391,90 @@ def main():
     gui_tuple = set_up_gui()
 
     phantom_name = "J03_2.obj"
-    num_sub_steps = 10
-    num_total_steps = 1_000_000
-    num_opt_steps = 1_000_000
+    num_sub_frames = 50
+    num_frames = 150
+    num_opt_steps = 100
     dt = 5e-5
     contact_model = Contact(
         use_tactile=USE_TACTILE,
-        use_state=USE_TACTILE,
+        use_state=USE_STATE,
         dt=dt,
-        total_steps=num_total_steps,
-        sub_steps=num_sub_steps,
+        num_frames=num_frames,
+        num_sub_frames=num_sub_frames,
         obj=phantom_name,
     )
     losses = []
     contact_model.draw_table()
     contact_model.init_pos_control()
-    contact_model.load_target()
     form_loss = 0
     for opts in range(num_opt_steps):
         print("Opt # step ======================", opts)
         contact_model.init()
         contact_model.clear_all_grad()
         contact_model.clear_state_loss_grad()
-        for ts in range(num_total_steps - 1):
+        for ts in range(num_frames - 1):
             contact_model.set_pos_control(ts)
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_control_vel(0)
             contact_model.fem_sensor1.set_vel(0)
             contact_model.reset()
-            for ss in range(num_sub_steps - 1):
+            for ss in range(num_sub_frames - 1):
                 contact_model.update(ss)
             contact_model.memory_to_cache(ts)
             print("# FP Iter ", ts)
-            if USE_TACTILE:
-                contact_model.compute_contact_force(num_sub_steps - 2)
-                form_loss = contact_model.loss[None]
-                contact_model.compute_force_loss()
-                print("contact force: ", contact_model.predict_force1[None])
-                print("force loss", contact_model.loss[None] - form_loss)
-            
+            contact_model.compute_contact_force(num_sub_frames - 2)
+            form_loss = contact_model.loss[None]
+            contact_model.compute_marker_loss(ts)
+            print("contact force: ", contact_model.predict_force1[None])
+            print("marker loss", contact_model.loss[None] - form_loss)
+
             update_gui(contact_model, gui_tuple)
 
-        loss_frame = 0
-        form_loss = 0
-        for ts in range(num_total_steps - 2, -1, -1):
+        loss_trajectory = 0
+        for ts in range(num_frames - 2, -1, -1):
             print("BP", ts)
             contact_model.clear_all_grad()
-            if USE_TACTILE:
-                contact_model.compute_contact_force(num_sub_steps - 2)
-                form_loss = contact_model.loss[None]
-                contact_model.compute_force_loss()
-                print("force loss", contact_model.loss[None] - form_loss)
-            if USE_TACTILE:
-                contact_model.compute_force_loss.grad()
-                contact_model.compute_contact_force.grad(num_sub_steps - 2)
-            for ss in range(num_sub_steps - 2, -1, -1):
+            contact_model.compute_marker_loss.grad(ts)
+            contact_model.compute_contact_force.grad(num_sub_frames - 2)
+            for ss in range(num_sub_frames - 2, -1, -1):
                 contact_model.update_grad(ss)
             contact_model.fem_sensor1.set_vel.grad(0)
             contact_model.fem_sensor1.set_control_vel.grad(0)
             contact_model.fem_sensor1.set_pose_control.grad()
             contact_model.set_pos_control.grad(ts)
-            grad_p1 = contact_model.p_sensor1.grad[ts]
-            grad_o1 = contact_model.o_sensor1.grad[ts]
-            lr_p = 1e4
-            lr_o = 1e4
-            contact_model.p_sensor1[ts] -= lr_p * grad_p1
-            contact_model.o_sensor1[ts] -= lr_o * grad_o1
-            loss_frame += contact_model.loss[None]
+
+            grad_friction_coeff = contact_model.friction_coeff.grad[ts]
+            grad_kn = contact_model.kn.grad[ts]
+            grad_kd = contact_model.kd.grad[ts]
+            grad_kt = contact_model.kt.grad[ts]
+            grad_mu = contact_model.fem_sensor1.mu.grad[ts]
+            grad_lam = contact_model.fem_sensor1.lam.grad[ts]
+
+            lr_friction_coeff = 1e-3
+            lr_kn = 1e-3
+            lr_kd = 1e-3
+            lr_kt = 1e-3
+            lr_mu = 1e-3
+            lr_lam = 1e-3
+
+            contact_model.friction_coeff[ts] -= lr_friction_coeff * grad_friction_coeff
+            contact_model.kn[ts] -= lr_kn * grad_kn
+            contact_model.kd[ts] -= lr_kd * grad_kd
+            contact_model.kt[ts] -= lr_kt * grad_kt
+            contact_model.fem_sensor1.mu[ts] -= lr_mu * grad_mu
+            contact_model.fem_sensor1.lam[ts] -= lr_lam * grad_lam
+
+            loss_trajectory += contact_model.loss[None]
             print("# BP Iter: ", ts, " loss: ", contact_model.loss[None])
-            print("P/O grads: ", grad_p1, grad_o1)
+            print("P/O grads: ", grad_friction_coeff, grad_kn, grad_kd, grad_kt, grad_mu, grad_lam)
             print(
                 "P/O updated: ",
-                contact_model.p_sensor1[ts],
-                contact_model.o_sensor1[ts],
+                contact_model.friction_coeff[ts],
+                contact_model.kn[ts],
+                contact_model.kd[ts],
+                contact_model.kt[ts],
+                contact_model.fem_sensor1.mu[ts],
+                contact_model.fem_sensor1.lam[ts],
             )
             if (ts - 1) >= 0:
                 contact_model.memory_from_cache(ts - 1)
@@ -435,12 +483,23 @@ def main():
                 contact_model.fem_sensor1.set_control_vel(0)
                 contact_model.fem_sensor1.set_vel(0)
                 contact_model.reset()
-                for ss in range(num_sub_steps - 1):
+                for ss in range(num_sub_frames - 1):
                     contact_model.update(ss)
-        losses.append(loss_frame)
-        if loss_frame <= np.min(losses):
-            best_p = contact_model.p_sensor1.to_numpy()
-            best_o = contact_model.o_sensor1.to_numpy()
+        losses.append(loss_trajectory)
+        if loss_trajectory <= np.min(losses):
+            best_friction_coeff = contact_model.friction_coeff.to_numpy()
+            best_kn = contact_model.kn.to_numpy()
+            best_kd = contact_model.kd.to_numpy()
+            best_kt = contact_model.kt.to_numpy()
+            best_mu = contact_model.fem_sensor1.mu.to_numpy()
+            best_lam = contact_model.fem_sensor1.lam.to_numpy()
+    print('best_friction_coeff', best_friction_coeff)
+    print('best_kn', best_kn)
+    print('best_kd', best_kd)
+    print('best_kt', best_kt)
+    print('best_mu', best_mu)
+    print('best_lam', best_lam)
+
 
 if __name__ == "__main__":
     main()
