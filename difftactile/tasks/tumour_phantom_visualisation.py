@@ -11,10 +11,6 @@ enable_gui3 = True
 
 class ContactVisualisation:
     def __init__(self):
-        self.space_scale = 10.0
-        self.obj_scale = 4.0
-        self.dim = 3
-
         self.view_phi = 0
         self.view_theta = 0
         self.view_scale = 10.0
