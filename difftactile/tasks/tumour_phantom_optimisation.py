@@ -44,9 +44,9 @@ class Contact(ContactVisualisation):
             sub_steps=num_sub_frames,
             obj_name=obj,
             space_scale=10.0,
-            obj_scale=4.0,
-            density=1.50 * 2,
-            rho=0.3,
+            obj_scale=2.0,
+            density=1.50,
+            rho=6.0,
         )
         self.init()
 
