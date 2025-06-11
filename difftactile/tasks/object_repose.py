@@ -566,8 +566,8 @@ def main():
 
     obj_name = "block-10.stl"
     num_sub_steps = 50
-    num_total_steps = 600
-    num_opt_steps = 100
+    num_total_steps = 2
+    num_opt_steps = 2
     dt = 5e-5
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
 
@@ -632,6 +632,11 @@ def main():
                 gui1.show()
                 gui2.show()
                 # gui3.show()
+            
+            ti.sync()
+            # 4. Print memory statistics
+            print("--- Taichi Memory Usage ---")
+            ti.investigate_memory_usage()
         ## backward!    
         loss_frame = 0
         form_loss = 0
