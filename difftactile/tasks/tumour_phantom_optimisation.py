@@ -88,6 +88,7 @@ class Contact(ContactVisualisation):
         self.squared_error_sum[None] = 0
 
         self.set_up_target_marker_positions()
+        self.target_marker_positions_current_frame = ti.Vector.field(2, dtype=ti.f32, shape=(self.experiment_num_markers), needs_grad=False)
         self.init_visualisation()
 
     def init(self):
@@ -303,21 +304,25 @@ class Contact(ContactVisualisation):
             for exp_idx, sim_idx in index_mapping.items():
                 reordered_markers[frame_idx, sim_idx] = marker_data[frame_idx, exp_idx]
 
-        self.target_marker_positions = ti.Vector.field(2, dtype=ti.f32, shape=(self.experiment_num_frames, self.experiment_num_markers))
-        self.target_marker_positions.from_numpy(reordered_markers)
+        self.target_marker_positions = reordered_markers
 
     @ti.kernel
-    def compute_marker_loss_1(self, frame_index: ti.i32):
+    def load_markers(self, f: ti.i32):
+        for i in range(self.experiment_num_markers):
+            self.target_marker_positions_current_frame[i] = self.target_marker_positions[f, i]
+
+    @ti.kernel
+    def compute_marker_loss_1(self, f: ti.i32):
         """
         Compute RMSE loss between experimental and simulated marker positions for a given frame.
         
         Args:
-            frame_index: Index of the frame to compute loss for
+            f: Index of the frame to compute loss for
         """
         # Iterate through all markers and accumulate squared errors
         for i in range(self.fem_sensor1.num_markers):
             # Get experimental and simulated marker positions
-            exp_marker = self.target_marker_positions[frame_index, i]
+            exp_marker = self.target_marker_positions_current_frame[i]
             sim_marker = self.fem_sensor1.virtual_markers[i]
             
             # Compute squared error for this marker pair
@@ -335,7 +340,7 @@ class Contact(ContactVisualisation):
 
 def main():
     if RUN_ON_LAB_MACHINE:
-        ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
+        ti.init(debug=False, offline_cache=False, arch=ti.cuda, device_memory_GB=9)
     else:
         ti.init(debug=False, offline_cache=False, arch=ti.cpu)
 
@@ -363,6 +368,7 @@ def main():
         contact_model.init()
         contact_model.clear_all_grad()
         for ts in range(num_frames - 1):
+            contact_model.load_markers(ts)
             contact_model.set_pos_control(ts)
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_control_vel(0)
@@ -394,6 +400,7 @@ def main():
             contact_model.fem_sensor1.set_control_vel.grad(0)
             contact_model.fem_sensor1.set_pose_control.grad()
             contact_model.set_pos_control.grad(ts)
+            contact_model.load_markers.grad(ts)
 
             grad_friction_coeff = contact_model.friction_coeff.grad[None]
             grad_kn = contact_model.kn.grad[None]
