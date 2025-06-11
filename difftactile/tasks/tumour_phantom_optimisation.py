@@ -16,16 +16,13 @@ off_screen = False
 enable_gui1 = True
 enable_gui2 = True
 enable_gui3 = True
-USE_TACTILE = True
-USE_STATE = True
 RUN_ON_LAB_MACHINE = True
+EARLY_RETURN = True
 
 @ti.data_oriented
 class Contact(ContactVisualisation):
     def __init__(
         self,
-        use_tactile=True,
-        use_state=True,
         dt=5e-5,
         num_frames=300,
         num_sub_frames=50,
@@ -37,8 +34,6 @@ class Contact(ContactVisualisation):
         self.num_frames = num_frames
         self.num_sub_frames = num_sub_frames
         self.fem_sensor1 = FEMDomeSensor(dt, num_sub_frames)
-        self.use_tactile = use_tactile
-        self.use_state = use_state
         self.mpm_object = MPMObj(
             dt=dt,
             sub_steps=num_sub_frames,
@@ -48,13 +43,15 @@ class Contact(ContactVisualisation):
             density=1.50 * 2,
             rho=0.3,
         )
-        self.init()
+        # self.init()
 
         self.kn = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kd = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kt = ti.field(dtype=float, shape=(), needs_grad=True)
         self.friction_coeff = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kn[None] = 34.53
+        if EARLY_RETURN:
+            return
         self.kd[None] = 269.44
         self.kt[None] = 108.72
         self.friction_coeff[None] = 14.16
@@ -87,8 +84,8 @@ class Contact(ContactVisualisation):
         self.squared_error_sum = ti.field(dtype=float, shape=(), needs_grad=True)
         self.squared_error_sum[None] = 0
 
-        self.set_up_target_marker_positions()
-        self.target_marker_positions_current_frame = ti.Vector.field(2, dtype=ti.f32, shape=(self.experiment_num_markers), needs_grad=False)
+        # self.set_up_target_marker_positions()
+        # self.target_marker_positions_current_frame = ti.Vector.field(2, dtype=ti.f32, shape=(self.experiment_num_markers), needs_grad=False)
         self.init_visualisation()
 
     def init(self):
@@ -286,59 +283,59 @@ class Contact(ContactVisualisation):
         self.fem_sensor1.memory_from_cache(t)
         self.mpm_object.memory_from_cache(t)
     
-    def set_up_target_marker_positions(self):
-        """
-        Reorders the experimental marker positions to match the simulation marker indexing convention.
-        Uses the Hungarian algorithm to find optimal marker-to-marker mapping based on squared Euclidean distances
-        between markers in the base frame (frame 0).
-        """
-        with open(f'../sensor_model/markers-paired.pkl', 'rb') as f:
-            marker_data = pickle.load(f)
-        self.experiment_num_frames = marker_data.shape[0]
-        self.experiment_num_markers = marker_data.shape[1]
-        cost_matrix = cdist(marker_data[0], self.fem_sensor1.virtual_markers.to_numpy(), metric='sqeuclidean')
-        exp_indices, sim_indices = linear_sum_assignment(cost_matrix)
-        index_mapping = {exp_idx: sim_idx for exp_idx, sim_idx in zip(exp_indices, sim_indices)}
-        reordered_markers = np.zeros_like(marker_data)
-        for frame_idx in range(self.experiment_num_frames):
-            for exp_idx, sim_idx in index_mapping.items():
-                reordered_markers[frame_idx, sim_idx] = marker_data[frame_idx, exp_idx]
+    # def set_up_target_marker_positions(self):
+    #     """
+    #     Reorders the experimental marker positions to match the simulation marker indexing convention.
+    #     Uses the Hungarian algorithm to find optimal marker-to-marker mapping based on squared Euclidean distances
+    #     between markers in the base frame (frame 0).
+    #     """
+    #     with open(f'../sensor_model/markers-paired.pkl', 'rb') as f:
+    #         marker_data = pickle.load(f)
+    #     self.experiment_num_frames = marker_data.shape[0]
+    #     self.experiment_num_markers = marker_data.shape[1]
+    #     cost_matrix = cdist(marker_data[0], self.fem_sensor1.virtual_markers.to_numpy(), metric='sqeuclidean')
+    #     exp_indices, sim_indices = linear_sum_assignment(cost_matrix)
+    #     index_mapping = {exp_idx: sim_idx for exp_idx, sim_idx in zip(exp_indices, sim_indices)}
+    #     reordered_markers = np.zeros_like(marker_data)
+    #     for frame_idx in range(self.experiment_num_frames):
+    #         for exp_idx, sim_idx in index_mapping.items():
+    #             reordered_markers[frame_idx, sim_idx] = marker_data[frame_idx, exp_idx]
 
-        self.target_marker_positions = reordered_markers
+    #     self.target_marker_positions = reordered_markers
 
-    def load_markers(self, f: ti.i32):
-        self.target_marker_positions_current_frame.from_numpy(self.target_marker_positions[f])
+    # def load_markers(self, f: ti.i32):
+    #     self.target_marker_positions_current_frame.from_numpy(self.target_marker_positions[f])
 
-    @ti.kernel
-    def compute_marker_loss_1(self, f: ti.i32):
-        """
-        Compute RMSE loss between experimental and simulated marker positions for a given frame.
+    # @ti.kernel
+    # def compute_marker_loss_1(self, f: ti.i32):
+    #     """
+    #     Compute RMSE loss between experimental and simulated marker positions for a given frame.
         
-        Args:
-            f: Index of the frame to compute loss for
-        """
-        # Iterate through all markers and accumulate squared errors
-        for i in range(self.fem_sensor1.num_markers):
-            # Get experimental and simulated marker positions
-            exp_marker = self.target_marker_positions_current_frame[i]
-            sim_marker = self.fem_sensor1.virtual_markers[i]
+    #     Args:
+    #         f: Index of the frame to compute loss for
+    #     """
+    #     # Iterate through all markers and accumulate squared errors
+    #     for i in range(self.fem_sensor1.num_markers):
+    #         # Get experimental and simulated marker positions
+    #         exp_marker = self.target_marker_positions_current_frame[i]
+    #         sim_marker = self.fem_sensor1.virtual_markers[i]
             
-            # Compute squared error for this marker pair
-            dx = exp_marker[0] - sim_marker[0]
-            dy = exp_marker[1] - sim_marker[1]
-            squared_error = dx * dx + dy * dy
-            self.squared_error_sum[None] += squared_error
+    #         # Compute squared error for this marker pair
+    #         dx = exp_marker[0] - sim_marker[0]
+    #         dy = exp_marker[1] - sim_marker[1]
+    #         squared_error = dx * dx + dy * dy
+    #         self.squared_error_sum[None] += squared_error
             
-    @ti.kernel
-    def compute_marker_loss_2(self):
-        # Compute RMSE and add to total loss
-        rmse = ti.sqrt(self.squared_error_sum[None] / self.fem_sensor1.num_markers)
-        self.loss[None] += rmse
+    # @ti.kernel
+    # def compute_marker_loss_2(self):
+    #     # Compute RMSE and add to total loss
+    #     rmse = ti.sqrt(self.squared_error_sum[None] / self.fem_sensor1.num_markers)
+    #     self.loss[None] += rmse
 
 
 def main():
     if RUN_ON_LAB_MACHINE:
-        ti.init(debug=False, offline_cache=False, arch=ti.cuda, device_memory_GB=9)
+        ti.init(debug=False, offline_cache=False, arch=ti.gpu, device_memory_GB=9)
     else:
         ti.init(debug=False, offline_cache=False, arch=ti.cpu)
 
@@ -350,13 +347,13 @@ def main():
     num_opt_steps = 2
     dt = 5e-5
     contact_model = Contact(
-        use_tactile=USE_TACTILE,
-        use_state=USE_STATE,
         dt=dt,
         num_frames=num_frames,
         num_sub_frames=num_sub_frames,
         obj=phantom_name,
     )
+    if EARLY_RETURN:
+        return
     losses = []
     contact_model.draw_table()
     contact_model.init_pos_control()
