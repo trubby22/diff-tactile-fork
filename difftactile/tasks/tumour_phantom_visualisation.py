@@ -13,7 +13,6 @@ class ContactVisualisation:
     def __init__(self):
         self.view_phi = 0
         self.view_theta = 0
-        self.view_scale = 10.0
         self.table_scale = 2.0
         self.table_height = 0.0
 
@@ -21,13 +20,10 @@ class ContactVisualisation:
         self.draw_pos2 = ti.Vector.field(2, float, self.fem_sensor1.n_verts)
         self.draw_pos3 = ti.Vector.field(2, float, self.mpm_object.n_particles)
         self.draw_tableline = ti.Vector.field(3, dtype=float, shape=(2 * 4))
-        self.draw_pos_3d = ti.Vector.field(
+        self.phantom_points = ti.Vector.field(
             3, dtype=float, shape=(self.mpm_object.n_particles)
         )
-        self.draw_fem1_3d = ti.Vector.field(
-            3, dtype=float, shape=(self.fem_sensor1.n_verts)
-        )
-        self.color_fem1_3d = ti.Vector.field(
+        self.sensor_points = ti.Vector.field(
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
 
@@ -153,13 +149,10 @@ class ContactVisualisation:
     @ti.kernel
     def draw_3d_scene(self, f: ti.i32):
         for p in range(self.mpm_object.n_particles):
-            self.draw_pos_3d[p] = self.mpm_object.x_0[f, p] / self.view_scale
+            self.phantom_points[p] = self.mpm_object.x_0[f, p]
         for p in range(self.fem_sensor1.num_surface):
             idx = self.fem_sensor1.surface_id[p]
-            self.draw_fem1_3d[p] = self.fem_sensor1.pos[f, idx] / self.view_scale
-            self.color_fem1_3d[p] = ti.Vector([0.9, 0.7, 0.8]) + 2.0 * (
-                self.fem_sensor1.pos[f, idx] - self.fem_sensor1.virtual_pos[f, idx]
-            )
+            self.sensor_points[p] = self.fem_sensor1.pos[f, idx]
 
 def set_up_gui():
     if off_screen:
@@ -251,15 +244,34 @@ def update_gui(contact_model, gui_tuple):
         contact_model.draw_3d_scene(0)
         particle_radius = 0.001
         scene.particles(
-            contact_model.draw_pos_3d,
-            color=(0.68, 0.26, 0.19),
+            contact_model.phantom_points,
+            color=(0.0, 0.0, 1.0),
             radius=particle_radius,
         )
         scene.particles(
-            contact_model.draw_fem1_3d,
-            per_vertex_color=contact_model.color_fem1_3d,
+            contact_model.sensor_points,
+            color=(1.0, 0.0, 0.0),
             radius=particle_radius,
         )
+        print('contact_model.phantom_points')
+        print(contact_model.phantom_points)
+        print()
+        print('contact_model.sensor_points')
+        print(contact_model.sensor_points)
+        print()
+        phantom_npy = contact_model.phantom_points.to_numpy()
+        sensor_npy = contact_model.sensor_points.to_numpy()
+        np.savetxt('phantom_coords.csv', phantom_npy, delimiter=",", fmt='%.2f')
+        np.savetxt('sensor_coords.csv', sensor_npy, delimiter=",", fmt='%.2f')
+        axiz = 0
+        phantom_min = np.min(phantom_npy, axis=axiz)
+        phantom_max = np.max(phantom_npy, axis=axiz)
+        sensor_min = np.min(sensor_npy, axis=axiz)
+        sensor_max = np.max(sensor_npy, axis=axiz)
+        print(f'phantom min {phantom_min} max {phantom_max}')
+        print(f'sensor min {sensor_min} max {sensor_max}')
+
+        raise Exception("you shall not pass")
         if False:
             single_point_radius = particle_radius * 10
             scene.particles(
