@@ -18,7 +18,7 @@ enable_gui2 = True
 enable_gui3 = True
 USE_TACTILE = True
 USE_STATE = True
-RUN_ON_LAB_MACHINE = False
+RUN_ON_LAB_MACHINE = True
 
 @ti.data_oriented
 class Contact(ContactVisualisation):
