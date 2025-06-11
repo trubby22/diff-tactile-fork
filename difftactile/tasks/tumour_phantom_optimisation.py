@@ -292,7 +292,7 @@ class Contact(ContactVisualisation):
         Uses the Hungarian algorithm to find optimal marker-to-marker mapping based on squared Euclidean distances
         between markers in the base frame (frame 0).
         """
-        with open('/Users/piotrblaszyk/Documents/university/MRIGI/individual-project-70007/diff-tactile-fork/difftactile/sensor_model/markers-paired.pkl', 'rb') as f:
+        with open(f'../sensor_model/markers-paired.pkl', 'rb') as f:
             marker_data = pickle.load(f)
         self.experiment_num_frames = marker_data.shape[0]
         self.experiment_num_markers = marker_data.shape[1]
@@ -306,10 +306,8 @@ class Contact(ContactVisualisation):
 
         self.target_marker_positions = reordered_markers
 
-    @ti.kernel
     def load_markers(self, f: ti.i32):
-        for i in range(self.experiment_num_markers):
-            self.target_marker_positions_current_frame[i] = self.target_marker_positions[f, i]
+        self.target_marker_positions_current_frame.from_numpy(self.target_marker_positions[f])
 
     @ti.kernel
     def compute_marker_loss_1(self, f: ti.i32):
@@ -400,7 +398,6 @@ def main():
             contact_model.fem_sensor1.set_control_vel.grad(0)
             contact_model.fem_sensor1.set_pose_control.grad()
             contact_model.set_pos_control.grad(ts)
-            contact_model.load_markers.grad(ts)
 
             grad_friction_coeff = contact_model.friction_coeff.grad[None]
             grad_kn = contact_model.kn.grad[None]

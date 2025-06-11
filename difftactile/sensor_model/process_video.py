@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 
 # Input and output video paths
-input_video_path = "/Users/piotrblaszyk/Documents/university/MRIGI/individual-project-70007/diff-tactile-fork/difftactile/sensor_model/system-id-screws-3-reps.mkv"
-output_video_path = "processed_video.mkv"
+input_video_path = "difftactile/sensor_model/system-id-screws-3-reps.mkv"
+output_video_path = "difftactile/sensor_model/processed_video.mkv"
 
 # Open the input video
 cap = cv2.VideoCapture(input_video_path)

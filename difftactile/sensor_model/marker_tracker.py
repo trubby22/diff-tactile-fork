@@ -423,7 +423,7 @@ def process_and_view_video(input_path, output_path=None):
 
 
 if __name__ == '__main__':
-    path = '/Users/piotrblaszyk/Documents/university/MRIGI/individual-project-70007/diff-tactile-fork/difftactile/sensor_model'
+    path = 'difftactile/sensor_model'
     process_and_view_video(f'{path}/system-id-screws-3-reps.mkv', f'{path}/marker-tracker.mkv')
 
     # player = VideoPlayer(f'{path}/marker-tracker.mkv')
