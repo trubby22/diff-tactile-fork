@@ -64,7 +64,6 @@ class Contact:
         self.friction_coeff = ti.field(dtype=float, shape=(), needs_grad=True)#0.5
 
         self.kn[None] = 55.0
-        # return
         self.kd[None] = 269.44
         self.kt[None] = 108.72
         self.friction_coeff[None] = 14.16
@@ -571,7 +570,6 @@ def main():
     num_opt_steps = 2
     dt = 5e-5
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
-    # return
 
     if not off_screen:
         gui1 = ti.GUI("Contact Viz")
@@ -634,6 +632,11 @@ def main():
                 gui1.show()
                 gui2.show()
                 # gui3.show()
+            
+            ti.sync()
+            # 4. Print memory statistics
+            print("--- Taichi Memory Usage ---")
+            ti.investigate_memory_usage()
         ## backward!    
         loss_frame = 0
         form_loss = 0
