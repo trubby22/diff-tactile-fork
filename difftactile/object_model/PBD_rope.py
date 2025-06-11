@@ -24,7 +24,7 @@ class PBDRope:
         self.p_vol = ti.math.pi*4/3*(self.p_rad**3)
         self.p_mass = self.p_vol * self.p_rho
         self.invM = 1.0/self.p_mass
-        self.gravity = ti.Vector([0.0, -9.8, 0.0])
+        self.gravity = ti.Vector([0.0, 0.0, 0.0])
         self.eps = 1e-10
         self.table_height = table_height
 

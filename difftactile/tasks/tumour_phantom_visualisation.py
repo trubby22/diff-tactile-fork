@@ -260,5 +260,17 @@ def update_gui(contact_model, gui_tuple):
             per_vertex_color=contact_model.color_fem1_3d,
             radius=particle_radius,
         )
+        if False:
+            single_point_radius = particle_radius * 10
+            scene.particles(
+                contact_model.tactile_sensor_initial_position,
+                color=(0.00, 1.00, 0.00),
+                radius=single_point_radius,
+            )
+            scene.particles(
+                contact_model.phantom_initial_position,
+                color=(0.00, 1.00, 0.00),
+                radius=single_point_radius,
+            )
         canvas.scene(scene)
         window.show()

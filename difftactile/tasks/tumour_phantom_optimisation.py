@@ -12,24 +12,19 @@ import pickle
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
-off_screen = False
 enable_gui1 = True
 enable_gui2 = True
 enable_gui3 = True
-USE_TACTILE = True
-USE_STATE = True
 RUN_ON_LAB_MACHINE = True
 
 @ti.data_oriented
 class Contact(ContactVisualisation):
     def __init__(
         self,
-        use_tactile=True,
-        use_state=True,
-        dt=5e-5,
-        num_frames=300,
-        num_sub_frames=50,
-        obj=None,
+        dt,
+        num_frames,
+        num_sub_frames,
+        obj,
     ):
         super().__init__()
 
@@ -37,8 +32,6 @@ class Contact(ContactVisualisation):
         self.num_frames = num_frames
         self.num_sub_frames = num_sub_frames
         self.fem_sensor1 = FEMDomeSensor(dt, num_sub_frames)
-        self.use_tactile = use_tactile
-        self.use_state = use_state
         self.mpm_object = MPMObj(
             dt=dt,
             sub_steps=num_sub_frames,
@@ -48,7 +41,7 @@ class Contact(ContactVisualisation):
             density=1.50,
             rho=6.0,
         )
-        self.init()
+        self.set_up_initial_positions()
 
         self.kn = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kd = ti.field(dtype=float, shape=(), needs_grad=True)
@@ -91,27 +84,27 @@ class Contact(ContactVisualisation):
         self.target_marker_positions_current_frame = ti.Vector.field(2, dtype=ti.f32, shape=(self.experiment_num_markers), needs_grad=False)
         self.init_visualisation()
 
-    def init(self):
-        x = 3.0
-        y = 2.25
-        z = 3.0
+    def set_up_initial_positions(self):
+        tactile_sensor_pose = [2.5, 5.25, 3.0, 180.0, 0.0, 0.0]
+        phantom_pose = [3.0, 2.25, 3.0, 0.0, 0.0, 0.0]
+        
+        self.mpm_object.init(
+            position=phantom_pose[:3],
+            orientation=phantom_pose[3:],
+            velocity=[0.0, 0.0, 0.0],
+        )
+        t_dx, t_dy, t_dz, rot_x, rot_y, rot_z = tactile_sensor_pose
+        self.fem_sensor1.init(rot_x, rot_y, rot_z, t_dx, t_dy, t_dz)
 
-        self.phantom_pos = [x, y, z]
-        self.phantom_ori = [0.0, 0.0, 0.0]
-        self.phantom_vel = [0.0, 0.0, 0.0]
-        self.mpm_object.init(self.phantom_pos, self.phantom_ori, self.phantom_vel)
-        rx1 = 180.0
-        ry1 = 0.0
-        rz1 = 0.0
-        t_dx1 = x - 0.5
-        t_dy1 = y + 3.0
-        t_dz1 = z
-        self.fem_sensor1.init(rx1, ry1, rz1, t_dx1, t_dy1, t_dz1)
+        self.tactile_sensor_initial_position = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
+        self.phantom_initial_position = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
+        self.tactile_sensor_initial_position[0] = ti.Vector(tactile_sensor_pose[:3])
+        self.phantom_initial_position[0] = ti.Vector(phantom_pose[:3])
 
     @ti.kernel
-    def init_pos_control(self):
+    def set_up_trajectory(self):
         vx1 = 0.0
-        vy1 = 100.0
+        vy1 = 0.0
         vz1 = 0.0
         rx1 = 0.0
         ry1 = 0.0
@@ -346,12 +339,10 @@ def main():
 
     phantom_name = "J03_2.obj"
     num_sub_frames = 50
-    num_frames = 2
-    num_opt_steps = 2
+    num_frames = 150
+    num_opt_steps = 5
     dt = 5e-5
     contact_model = Contact(
-        use_tactile=USE_TACTILE,
-        use_state=USE_STATE,
         dt=dt,
         num_frames=num_frames,
         num_sub_frames=num_sub_frames,
@@ -359,11 +350,11 @@ def main():
     )
     losses = []
     contact_model.draw_table()
-    contact_model.init_pos_control()
+    contact_model.set_up_trajectory()
     form_loss = 0
     for opts in range(num_opt_steps):
         print("Opt # step ======================", opts)
-        contact_model.init()
+        contact_model.set_up_initial_positions()
         contact_model.clear_all_grad()
         for ts in range(num_frames - 1):
             contact_model.load_markers(ts)

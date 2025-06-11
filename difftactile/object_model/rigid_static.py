@@ -32,7 +32,7 @@ class RigidObj:
         self.obj_scale = obj_scale
         self.rho = rho * self.obj_scale
         self.particle_density = self.n_grid * density * obj_scale / space_scale
-        self.gravity = ti.Vector([0.0, -9.8, 0.0])
+        self.gravity = ti.Vector([0.0, 0.0, 0.0])
 
         ## parameters for object
         self.obj_name = obj_name

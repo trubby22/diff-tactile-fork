@@ -34,7 +34,7 @@ class MultiObj:
         self.obj_scale = obj_scale
         self.rho = rho * self.obj_scale
         self.particle_density = self.n_grid * density * obj_scale / space_scale
-        self.gravity = ti.Vector([0.0, -2, 0.0])
+        self.gravity = ti.Vector([0.0, 0.0, 0.0])
 
         self.border_line = np.array([-0.42, 0.42]) * self.obj_scale
 
