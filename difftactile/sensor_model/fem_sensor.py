@@ -9,6 +9,7 @@ from math import pi
 import numpy as np
 from scipy.spatial import Delaunay
 from scipy.spatial.transform import Rotation as R
+import pickle
 from difftactile.sensor_model.fisheye_model import * 
 
 TI_TYPE = ti.f32
@@ -34,6 +35,7 @@ class FEMDomeSensor:
         self.dim = 3
         self.dx = 2 * np.pi * self.inner_radius**2 / self.N_node
         self.vol = self.dx * self.t_res
+        print(f'self.dx: {self.dx}; self.vol: {self.vol}')
         self.rho = 2000.0e0 # density
         self.mass = self.vol * self.rho
         self.eps = 1e-10
@@ -126,6 +128,12 @@ class FEMDomeSensor:
         self.trans_h[None] = self.trans_world[None] @ self.trans_local[None]
         self.inv_trans_h[None] = self.trans_local[None].inverse() @ self.trans_world[None].inverse()
         self.init_pos()
+        with open(f"output/tactile_sensor.pos.pkl", 'wb') as f:
+            pickle.dump(self.pos.to_numpy()[0], f)
+        np.savetxt(f'output/tactile_sensor.pos.csv', self.pos.to_numpy()[0], delimiter=",", fmt='%.2f')
+        with open(f"./output/tactile_sensor.init_x.pkl", 'wb') as f:
+            pickle.dump(self.init_x.to_numpy(), f)
+        np.savetxt(f'output/tactile_sensor.init_x.csv', self.init_x.to_numpy()[0], delimiter=",", fmt='%.2f')
 
     def init_cam_model(self, init_img_path=None):
         if init_img_path is None:
@@ -302,7 +310,11 @@ class FEMDomeSensor:
             rad = self.inner_radius + i * self.t_res
             ratio = (rad**2) / (self.inner_radius**2)
             n_node = int(self.N_node * ratio)
+            print(f'i: {i}; rad: {rad}; ratio: {ratio}; n_node: {n_node}')
             layer_nodes = self.fibonacci_sphere(samples=n_node, scale = rad)
+            with open(f"output/tactile_sensor.layer_nodes_{i}.pkl", 'wb') as f:
+                pickle.dump(np.array(layer_nodes), f)
+            np.savetxt(f'output/tactile_sensor.layer_nodes_{i}.csv', np.array(layer_nodes), delimiter=",", fmt='%.2f')
             all_nodes.append(layer_nodes)
             layer_height.append([rad] * n_node)
             layer_idxs.append([i] * n_node)
@@ -319,6 +331,16 @@ class FEMDomeSensor:
         triangle_nodes = np.array([all_nodes[:,0], layer_height, all_nodes[:,2]]).T
         all_f2v = Delaunay(triangle_nodes).simplices # M * 4 (tetrahedrons)
         layer_idxs = np.concatenate(layer_idxs,axis=0) # N
+        pickles = [
+            ('all_nodes', all_nodes),
+            ('triangle_nodes', triangle_nodes),
+            ('all_f2v', all_f2v),
+            ('layer_idxs', layer_idxs),
+        ]
+        for x, y in pickles:
+            with open(f"output/tactile_sensor.{x}.pkl", 'wb') as f:
+                pickle.dump(y, f)
+            np.savetxt(f'output/tactile_sensor.{x}.csv', y, delimiter=",", fmt='%.2f')
         return all_nodes, all_f2v, surface_f2v, layer_idxs
 
     @ti.kernel
@@ -338,7 +360,6 @@ class FEMDomeSensor:
             self.B[i] = B_i_inv.inverse()
 
         self.out_direction[None] = self.rot_h[None] @ ti.Vector([0.0, 1.0, 0.0])
-
 
     @ti.func
     def find_closest(self, grid_p, f):

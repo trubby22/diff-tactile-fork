@@ -46,7 +46,7 @@ class MPMObj:
             obj_loader = ObjLoader(data_path, particle_density = int(self.particle_density))
             obj_loader.generate_particles()
             self.n_particles = len(obj_loader.particles)
-            np.savetxt(f'particles-{self.obj_name}.csv', obj_loader.particles, delimiter=",", fmt='%.2f')
+            np.savetxt(f'output/particles-{self.obj_name}.csv', obj_loader.particles, delimiter=",", fmt='%.2f')
             self.particles = ti.Vector.field(3, dtype=float, shape=self.n_particles)
             self.particles.from_numpy((obj_loader.particles * self.obj_scale).astype(np.float32))
             print("Object model is loaded!")

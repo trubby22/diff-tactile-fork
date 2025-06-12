@@ -7,7 +7,7 @@ import numpy as np
 import math
 
 off_screen = False
-enable_gui1 = False
+enable_gui1 = True
 enable_gui2 = False
 enable_gui3 = False
 
@@ -190,7 +190,7 @@ def set_up_gui():
         camera.position(2.5, 3.5, 5.0)
         camera.up(0, 1, 0)
         camera.lookat(2.5, 3.5, 3.0)
-        camera.fov(135)
+        camera.fov(34)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
         else:
@@ -214,7 +214,7 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
     if True:
         a = 2.5
         b = 3.0
-        r = 2.0
+        r = 20.0
         p = ts / num_frames
 
         theta = p * 2 * math.pi
@@ -290,8 +290,8 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
             print()
             phantom_npy = contact_model.phantom_points.to_numpy()
             sensor_npy = contact_model.sensor_points.to_numpy()
-            np.savetxt('phantom_coords.csv', phantom_npy, delimiter=",", fmt='%.2f')
-            np.savetxt('sensor_coords.csv', sensor_npy, delimiter=",", fmt='%.2f')
+            np.savetxt('output/phantom_coords.csv', phantom_npy, delimiter=",", fmt='%.2f')
+            np.savetxt('output/sensor_coords.csv', sensor_npy, delimiter=",", fmt='%.2f')
             axiz = 0
             phantom_min = np.min(phantom_npy, axis=axiz)
             phantom_max = np.max(phantom_npy, axis=axiz)

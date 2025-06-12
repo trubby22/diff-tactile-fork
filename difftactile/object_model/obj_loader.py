@@ -24,9 +24,9 @@ class ObjLoader:
 
     def generate_particles(self):
         self.raw_mesh = trimesh.load(self.data_path, force='mesh', skip_texture=True)
-        np.savetxt('raw_mesh.vertices.csv', self.raw_mesh.vertices, delimiter=",", fmt='%.2f')
+        np.savetxt('output/raw_mesh.vertices.csv', self.raw_mesh.vertices, delimiter=",", fmt='%.2f')
         self.normalized_mesh = self.cleanup_mesh(self.normalize_mesh(self.raw_mesh))
-        np.savetxt('normalized_mesh.vertices.csv', self.normalized_mesh.vertices, delimiter=",", fmt='%.2f')
+        np.savetxt('output/normalized_mesh.vertices.csv', self.normalized_mesh.vertices, delimiter=",", fmt='%.2f')
         self.voxelized_mesh = self.normalized_mesh.voxelized(pitch=1.0/self.voxel_resolution).fill()
         cube_particles = self.sample_cube()
         self.particles = cube_particles[self.voxelized_mesh.is_filled(cube_particles)]
