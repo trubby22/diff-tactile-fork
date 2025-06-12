@@ -171,10 +171,10 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(10, 10, 10)
+        camera.position(2.5, 3.25, 5.0)
         camera.up(0, 1, 0)
-        camera.lookat(0, 0, 0)
-        camera.fov(2.0)
+        camera.lookat(2.5, 3.25, 3.0)
+        camera.fov(135)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
         else:
@@ -190,10 +190,14 @@ def set_up_gui():
         
         return (gui1, gui2, gui3, camera, scene, window, canvas)
 
-def update_gui(contact_model, gui_tuple):
+def update_gui(contact_model, gui_tuple, num_frames, ts):
     if off_screen:
         return
     gui1, gui2, gui3, camera, scene, window, canvas = gui_tuple
+
+    if False:
+        x = 30 + ts / num_frames * 150
+        camera.fov(x)
 
     viz_scale = 0.1
     viz_offset = [0.25, 0.25]
@@ -242,37 +246,38 @@ def update_gui(contact_model, gui_tuple):
         scene.ambient_light((0.8, 0.8, 0.8))
         scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
         contact_model.draw_3d_scene(0)
-        particle_radius = 0.001
+        particle_radius = 0.02
         scene.particles(
             contact_model.phantom_points,
             color=(0.0, 0.0, 1.0),
-            radius=particle_radius,
+            radius=0.005,
         )
         scene.particles(
             contact_model.sensor_points,
             color=(1.0, 0.0, 0.0),
             radius=particle_radius,
         )
-        print('contact_model.phantom_points')
-        print(contact_model.phantom_points)
-        print()
-        print('contact_model.sensor_points')
-        print(contact_model.sensor_points)
-        print()
-        phantom_npy = contact_model.phantom_points.to_numpy()
-        sensor_npy = contact_model.sensor_points.to_numpy()
-        np.savetxt('phantom_coords.csv', phantom_npy, delimiter=",", fmt='%.2f')
-        np.savetxt('sensor_coords.csv', sensor_npy, delimiter=",", fmt='%.2f')
-        axiz = 0
-        phantom_min = np.min(phantom_npy, axis=axiz)
-        phantom_max = np.max(phantom_npy, axis=axiz)
-        sensor_min = np.min(sensor_npy, axis=axiz)
-        sensor_max = np.max(sensor_npy, axis=axiz)
-        print(f'phantom min {phantom_min} max {phantom_max}')
-        print(f'sensor min {sensor_min} max {sensor_max}')
-
-        raise Exception("you shall not pass")
         if False:
+            print('contact_model.phantom_points')
+            print(contact_model.phantom_points)
+            print()
+            print('contact_model.sensor_points')
+            print(contact_model.sensor_points)
+            print()
+            phantom_npy = contact_model.phantom_points.to_numpy()
+            sensor_npy = contact_model.sensor_points.to_numpy()
+            np.savetxt('phantom_coords.csv', phantom_npy, delimiter=",", fmt='%.2f')
+            np.savetxt('sensor_coords.csv', sensor_npy, delimiter=",", fmt='%.2f')
+            axiz = 0
+            phantom_min = np.min(phantom_npy, axis=axiz)
+            phantom_max = np.max(phantom_npy, axis=axiz)
+            sensor_min = np.min(sensor_npy, axis=axiz)
+            sensor_max = np.max(sensor_npy, axis=axiz)
+            print(f'phantom min {phantom_min} max {phantom_max}')
+            print(f'sensor min {sensor_min} max {sensor_max}')
+
+            raise Exception("you shall not pass")
+        if True:
             single_point_radius = particle_radius * 10
             scene.particles(
                 contact_model.tactile_sensor_initial_position,
@@ -281,7 +286,7 @@ def update_gui(contact_model, gui_tuple):
             )
             scene.particles(
                 contact_model.phantom_initial_position,
-                color=(0.00, 1.00, 0.00),
+                color=(1.0, 1.0, 0.0),
                 radius=single_point_radius,
             )
         canvas.scene(scene)

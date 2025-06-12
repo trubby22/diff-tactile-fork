@@ -374,7 +374,7 @@ def main():
             print("contact force: ", contact_model.predict_force1[None])
             print("marker loss", contact_model.loss[None] - form_loss)
 
-            update_gui(contact_model, gui_tuple)
+            update_gui(contact_model, gui_tuple, num_frames, ts)
 
         loss_trajectory = 0
         for ts in range(num_frames - 2, -1, -1):
@@ -433,7 +433,7 @@ def main():
                 contact_model.reset()
                 for ss in range(num_sub_frames - 1):
                     contact_model.update(ss)
-            update_gui(contact_model, gui_tuple)
+            update_gui(contact_model, gui_tuple, num_frames, ts)
         losses.append(loss_trajectory)
         if loss_trajectory <= np.min(losses):
             best_friction_coeff = contact_model.friction_coeff.to_numpy()
