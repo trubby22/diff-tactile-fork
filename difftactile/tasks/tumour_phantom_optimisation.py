@@ -12,9 +12,6 @@ import pickle
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
-enable_gui1 = True
-enable_gui2 = True
-enable_gui3 = True
 RUN_ON_LAB_MACHINE = True
 
 @ti.data_oriented
@@ -337,7 +334,7 @@ def main():
 
     gui_tuple = set_up_gui()
 
-    phantom_name = "J03_2.obj"
+    phantom_name = "suturing-phantom.stl"
     num_sub_frames = 50
     num_frames = 150
     num_opt_steps = 5

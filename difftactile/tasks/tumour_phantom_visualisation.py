@@ -7,9 +7,9 @@ import numpy as np
 import math
 
 off_screen = False
-enable_gui1 = True
-enable_gui2 = True
-enable_gui3 = True
+enable_gui1 = False
+enable_gui2 = False
+enable_gui3 = False
 
 class ContactVisualisation:
     def __init__(self):
