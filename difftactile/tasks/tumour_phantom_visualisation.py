@@ -4,6 +4,8 @@ from difftactile.object_model.mpm_elastic import MPMObj
 import taichi as ti
 import numpy as np
 
+import math
+
 off_screen = False
 enable_gui1 = True
 enable_gui2 = True
@@ -26,6 +28,20 @@ class ContactVisualisation:
         self.sensor_points = ti.Vector.field(
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
+        key_points_npy = np.array([
+            [2.5, 0.0, 3.0],
+            [0.0, 0.0, 0.0],
+            [2.5, 3.25, 3.0],
+        ])
+        key_point_colours_npy = np.array([
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+        ])
+        self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=key_points_npy.shape[0], needs_grad=False)
+        self.key_point_colours = ti.Vector.field(3, dtype=ti.f32, shape=key_point_colours_npy.shape[0], needs_grad=False)
+        self.key_points.from_numpy(key_points_npy)
+        self.key_point_colours.from_numpy(key_point_colours_npy)
 
     def draw_markers(self, init_markers, cur_markers, gui):
         img_height = 480
@@ -171,9 +187,9 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(2.5, 3.25, 5.0)
+        camera.position(2.5, 3.5, 5.0)
         camera.up(0, 1, 0)
-        camera.lookat(2.5, 3.25, 3.0)
+        camera.lookat(2.5, 3.5, 3.0)
         camera.fov(135)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
@@ -195,9 +211,17 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
         return
     gui1, gui2, gui3, camera, scene, window, canvas = gui_tuple
 
-    if False:
-        x = 30 + ts / num_frames * 150
-        camera.fov(x)
+    if True:
+        a = 2.5
+        b = 3.0
+        r = 2.0
+        p = ts / num_frames
+
+        theta = p * 2 * math.pi
+        x = a + r * math.cos(theta)
+        y = b + r * math.sin(theta)
+
+        camera.position(x, 3.5, y)
 
     viz_scale = 0.1
     viz_offset = [0.25, 0.25]
@@ -278,16 +302,21 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
 
             raise Exception("you shall not pass")
         if True:
-            single_point_radius = particle_radius * 10
+            key_point_radius = particle_radius * 10
             scene.particles(
                 contact_model.tactile_sensor_initial_position,
                 color=(0.00, 1.00, 0.00),
-                radius=single_point_radius,
+                radius=key_point_radius,
             )
             scene.particles(
                 contact_model.phantom_initial_position,
                 color=(1.0, 1.0, 0.0),
-                radius=single_point_radius,
+                radius=key_point_radius,
+            )
+            scene.particles(
+                contact_model.key_points,
+                per_vertex_color=contact_model.key_point_colours,
+                radius=key_point_radius,
             )
         canvas.scene(scene)
         window.show()
