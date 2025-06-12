@@ -6,6 +6,6 @@ difftactile.egg-info
 # lr_object_repose_state_False_tactile_False_1
 lr_*/
 *.txt
-*.ipynb
 *.mkv
 *.pkl
+sandbox.ipynb
