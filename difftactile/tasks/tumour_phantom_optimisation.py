@@ -82,8 +82,8 @@ class Contact(ContactVisualisation):
         self.init_visualisation()
 
     def set_up_initial_positions(self):
-        tactile_sensor_pose = [7.50, 6.50, 4.90 + 2.0, -90.0, 0.0, 0.0]
-        phantom_pose = [7.50, 6.50, 0.65, 0.0, 0.0, 0.0]
+        phantom_pose = [12.50, 11.50, 5.65, 0.0, 0.0, 0.0]
+        tactile_sensor_pose = [12.50, 11.50, 9.90, -90.0, 0.0, 0.0]
         
         self.mpm_object.init(
             position=phantom_pose[:3],
@@ -100,7 +100,7 @@ class Contact(ContactVisualisation):
 
     @ti.kernel
     def set_up_trajectory(self):
-        velocity = [0.0, 8.0, 0.0, 0.0, 0.0, 0.0]
+        velocity = [0.0, 16.0, 0.0, 0.0, 0.0, 0.0]
 
         vx1, vy1, vz1 = velocity[:3]
         rx1, ry1, rz1 = velocity[3:]
