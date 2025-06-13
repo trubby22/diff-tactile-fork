@@ -523,41 +523,22 @@ class FEMDomeSensor:
         device = 'cpu'
         self.cache[cur_step_name] = dict()
 
-        # Initialize cache arrays with proper shapes
         self.cache[cur_step_name]['pos'] = torch.zeros((self.n_verts, self.dim), dtype=TC_TYPE, device=device)
         self.cache[cur_step_name]['vel'] = torch.zeros((self.n_verts, self.dim), dtype=TC_TYPE, device=device)
         self.cache[cur_step_name]['trans_h'] = torch.zeros((4,4), dtype=TC_TYPE, device=device)
         self.cache[cur_step_name]['rot_h'] = torch.zeros((3,3), dtype=TC_TYPE, device=device)
         self.cache[cur_step_name]['virtual_pos'] = torch.zeros((self.n_verts, self.dim), dtype=TC_TYPE, device=device)
-        
-        # Add safety check before copying
-        if self.pos.shape[0] > 0 and self.vel.shape[0] > 0 and self.virtual_pos.shape[0] > 0:
-            self.add_step_to_cache(0, self.cache[cur_step_name]['pos'], self.cache[cur_step_name]['vel'], 
-                                 self.cache[cur_step_name]['trans_h'], self.cache[cur_step_name]['virtual_pos'], 
-                                 self.cache[cur_step_name]['rot_h'])
-            self.copy_frame(self.sub_steps-1, 0)
-        else:
-            print(f"Warning: Invalid tensor shapes during memory caching at step {t}")
-            print(f"pos shape: {self.pos.shape}, vel shape: {self.vel.shape}, virtual_pos shape: {self.virtual_pos.shape}")
+        self.add_step_to_cache(0, self.cache[cur_step_name]['pos'], self.cache[cur_step_name]['vel'], self.cache[cur_step_name]['trans_h'], self.cache[cur_step_name]['virtual_pos'], self.cache[cur_step_name]['rot_h'])
+        self.copy_frame(self.sub_steps-1, 0)
 
     def memory_from_cache(self, t):
         cur_step_name = f'{t:06d}'
-        if cur_step_name not in self.cache:
-            print(f"Warning: Cache not found for step {t}")
-            return
-        
         device = 'cpu'
         self.copy_frame(0, self.sub_steps-1)
         self.copy_grad(0, self.sub_steps-1)
         self.clear_step_grad(self.sub_steps-1)
 
-        # Add safety check before loading
-        if all(key in self.cache[cur_step_name] for key in ['pos', 'vel', 'trans_h', 'virtual_pos', 'rot_h']):
-            self.load_step_from_cache(0, self.cache[cur_step_name]['pos'], self.cache[cur_step_name]['vel'],
-                                    self.cache[cur_step_name]['trans_h'], self.cache[cur_step_name]['virtual_pos'],
-                                    self.cache[cur_step_name]['rot_h'])
-        else:
-            print(f"Warning: Incomplete cache data for step {t}")
+        self.load_step_from_cache(0, self.cache[cur_step_name]['pos'], self.cache[cur_step_name]['vel'], self.cache[cur_step_name]['trans_h'], self.cache[cur_step_name]['virtual_pos'], self.cache[cur_step_name]['rot_h'])
 
     @ti.kernel
     def clear_loss_grad(self):

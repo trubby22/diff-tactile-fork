@@ -237,10 +237,7 @@ class Contact(ContactVisualisation):
                     ]
                 )
                 min_idx1 = self.fem_sensor1.find_closest(cur_p, f)
-                if min_idx1 >= 0 and min_idx1 < self.fem_sensor1.num_triangles:
-                    self.contact_idx[f, i, j, k] = min_idx1
-                else:
-                    self.contact_idx[f, i, j, k] = -1
+                self.contact_idx[f, i, j, k] = min_idx1
 
     @ti.kernel
     def collision(self, f: ti.i32):
@@ -248,10 +245,6 @@ class Contact(ContactVisualisation):
             self.mpm_object.n_grid, self.mpm_object.n_grid, self.mpm_object.n_grid
         ):
             if self.mpm_object.grid_occupy[f, i, j, k] == 1:
-                min_idx1 = self.contact_idx[f, i, j, k]
-                if min_idx1 < 0:
-                    continue
-                
                 cur_p = ti.Vector(
                     [
                         (i + 0.5) * self.mpm_object.dx_0,
@@ -262,6 +255,7 @@ class Contact(ContactVisualisation):
                 cur_v = self.mpm_object.grid_v_in[f, i, j, k] / (
                     self.mpm_object.grid_m[f, i, j, k] + self.mpm_object.eps
                 )
+                min_idx1 = self.contact_idx[f, i, j, k]
                 cur_sdf1, cur_norm_v1, cur_relative_v1, contact_flag1 = (
                     self.fem_sensor1.find_sdf(cur_p, cur_v, min_idx1, f)
                 )
@@ -269,9 +263,6 @@ class Contact(ContactVisualisation):
                     ext_v1, _, _ = self.calculate_contact_force(
                         cur_sdf1, -1 * cur_norm_v1, -1 * cur_relative_v1
                     )
-                    force_mag = ext_v1.norm()
-                    if force_mag > 1000.0:
-                        ext_v1 = ext_v1 * (1000.0 / force_mag)
                     self.mpm_object.update_contact_force(ext_v1, f, i, j, k)
                     self.fem_sensor1.update_contact_force(min_idx1, -1 * ext_v1, f)
 
