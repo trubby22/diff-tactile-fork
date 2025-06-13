@@ -33,8 +33,8 @@ class Contact(ContactVisualisation):
             dt=dt,
             sub_steps=num_sub_frames,
             obj_name=obj,
-            space_scale=300.0,
-            obj_scale=150.0,
+            space_scale=30.0,
+            obj_scale=15.0,
             density=1.50,
             rho=6.0,
         )
@@ -82,9 +82,8 @@ class Contact(ContactVisualisation):
         self.init_visualisation()
 
     def set_up_initial_positions(self):
-        tactile_sensor_pose = [41., 13., 4.9, 180.0, 0.0, 0.0]
-        # phantom_pose = [3.35500000e+01, 6.54333333e+00, 4.33333333e-03, 0.0, 0.0, 0.0]
-        phantom_pose = [-3.35500000e+01, -6.54333333e+00, 4.33333333e-03, 0.0, 0.0, 0.0]
+        tactile_sensor_pose = [7.50, 6.50, 4.90 + 2.0, -90.0, 0.0, 0.0]
+        phantom_pose = [7.50, 6.50, 0.65, 0.0, 0.0, 0.0]
         
         self.mpm_object.init(
             position=phantom_pose[:3],
@@ -101,7 +100,7 @@ class Contact(ContactVisualisation):
 
     @ti.kernel
     def set_up_trajectory(self):
-        velocity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        velocity = [0.0, 8.0, 0.0, 0.0, 0.0, 0.0]
 
         vx1, vy1, vz1 = velocity[:3]
         rx1, ry1, rz1 = velocity[3:]
@@ -238,7 +237,10 @@ class Contact(ContactVisualisation):
                     ]
                 )
                 min_idx1 = self.fem_sensor1.find_closest(cur_p, f)
-                self.contact_idx[f, i, j, k] = min_idx1
+                if min_idx1 >= 0 and min_idx1 < self.fem_sensor1.num_triangles:
+                    self.contact_idx[f, i, j, k] = min_idx1
+                else:
+                    self.contact_idx[f, i, j, k] = -1
 
     @ti.kernel
     def collision(self, f: ti.i32):
@@ -246,6 +248,10 @@ class Contact(ContactVisualisation):
             self.mpm_object.n_grid, self.mpm_object.n_grid, self.mpm_object.n_grid
         ):
             if self.mpm_object.grid_occupy[f, i, j, k] == 1:
+                min_idx1 = self.contact_idx[f, i, j, k]
+                if min_idx1 < 0:
+                    continue
+                
                 cur_p = ti.Vector(
                     [
                         (i + 0.5) * self.mpm_object.dx_0,
@@ -256,7 +262,6 @@ class Contact(ContactVisualisation):
                 cur_v = self.mpm_object.grid_v_in[f, i, j, k] / (
                     self.mpm_object.grid_m[f, i, j, k] + self.mpm_object.eps
                 )
-                min_idx1 = self.contact_idx[f, i, j, k]
                 cur_sdf1, cur_norm_v1, cur_relative_v1, contact_flag1 = (
                     self.fem_sensor1.find_sdf(cur_p, cur_v, min_idx1, f)
                 )
@@ -264,6 +269,9 @@ class Contact(ContactVisualisation):
                     ext_v1, _, _ = self.calculate_contact_force(
                         cur_sdf1, -1 * cur_norm_v1, -1 * cur_relative_v1
                     )
+                    force_mag = ext_v1.norm()
+                    if force_mag > 1000.0:
+                        ext_v1 = ext_v1 * (1000.0 / force_mag)
                     self.mpm_object.update_contact_force(ext_v1, f, i, j, k)
                     self.fem_sensor1.update_contact_force(min_idx1, -1 * ext_v1, f)
 

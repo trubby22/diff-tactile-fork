@@ -24,6 +24,9 @@ class MPMObj:
         '''
         self.sub_steps = sub_steps
         self.dt = dt
+        self.ball_pos = ti.Vector.field(3,dtype=ti.f32, shape=())
+        self.ball_ori = ti.Vector.field(3,dtype=ti.f32, shape=())
+        self.ball_vel = ti.Vector.field(3,dtype=ti.f32, shape=())
         self.rot_h = ti.Matrix.field(3, 3, ti.f32, shape = ())
         self.trans_h = ti.Matrix.field(4, 4, ti.f32, shape = ())
 
@@ -85,12 +88,14 @@ class MPMObj:
         self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad = True) # surface aggreated 3-axis forces
         self.cache = dict() # for grad backward
 
-    def init(self, position, orientation, velocity, manipulation_space_closest_vertex):
-        self.set_object_params(position, orientation, velocity, manipulation_space_closest_vertex)
+    def init(self, position, orientation, velocity):
+        self.set_object_params(position, orientation, velocity)
         self.init_object()
 
-    def set_object_params(self, position, orientation, velocity, manipulation_space_closest_vertex):
-        self.manipulation_space_closest_vertex = manipulation_space_closest_vertex
+    def set_object_params(self, position, orientation, velocity):
+        self.ball_pos[None] = position
+        self.ball_ori[None] = orientation
+        self.ball_vel[None] = velocity
 
         rot = R.from_rotvec(np.deg2rad([orientation[0], orientation[1], orientation[2]]))
         rot_mat = rot.as_matrix()

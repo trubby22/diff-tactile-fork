@@ -29,11 +29,12 @@ class ContactVisualisation:
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
         key_points_npy = np.array([
-            [33.5,  6.5,  0. ],
-            [48.5,  6.5,  0. ],
-            [33.5, 19.5,  0. ],
-            [33.5,  6.5,  1.3],
-            [41.,  13.,   1.3],
+            [0.00, 0.00, 0.00],
+            [15.00, 0.00, 0.00],
+            [0.00, 13.00, 0.00],
+            [0.00, 0.00, 1.30],
+            [7.50, 6.50, 1.30],
+            [7.50, 6.50, 1.60 + 0.5],
         ])
         key_point_colours_npy = np.array([
             [1.0, 1.0, 1.0],
@@ -41,6 +42,7 @@ class ContactVisualisation:
             [0.0, 1.0, 0.0],
             [0.0, 0.0, 1.0],
             [1.0, 1.0, 0.0],
+            [0.0, 1.0, 1.0],
         ])
         self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=key_points_npy.shape[0], needs_grad=False)
         self.key_point_colours = ti.Vector.field(3, dtype=ti.f32, shape=key_point_colours_npy.shape[0], needs_grad=False)
@@ -191,9 +193,9 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(42.51137817, 11.69013892, 4.3)
+        camera.position(9.01, 5.19, 4.90)
         camera.up(0, 0, 1)
-        camera.lookat(41., 13., 1.3)
+        camera.lookat(7.50, 6.50, 4.90)
         camera.fov(34)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
@@ -216,8 +218,8 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
     gui1, gui2, gui3, camera, scene, window, canvas = gui_tuple
 
     if True:
-        a = 41.
-        b = 13.
+        a = 9.01
+        b = 5.19
         r = 20.0
         p = ts / num_frames
 
@@ -225,7 +227,7 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
         x = a + r * math.cos(theta)
         y = b + r * math.sin(theta)
 
-        camera.position(x, y, 4.3)
+        camera.position(x, y, 4.90)
 
     viz_scale = 0.1
     viz_offset = [0.25, 0.25]
