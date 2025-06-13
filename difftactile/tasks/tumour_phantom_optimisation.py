@@ -33,8 +33,8 @@ class Contact(ContactVisualisation):
             dt=dt,
             sub_steps=num_sub_frames,
             obj_name=obj,
-            space_scale=10.0,
-            obj_scale=2.0,
+            space_scale=300.0,
+            obj_scale=150.0,
             density=1.50,
             rho=6.0,
         )
@@ -82,8 +82,9 @@ class Contact(ContactVisualisation):
         self.init_visualisation()
 
     def set_up_initial_positions(self):
-        tactile_sensor_pose = [1.0, 2.5, 0.0, 180.0, 0.0, 0.0]
-        phantom_pose = [23.0, 2.25, 3.0, 0.0, 0.0, 0.0]
+        tactile_sensor_pose = [41., 13., 4.9, 180.0, 0.0, 0.0]
+        # phantom_pose = [3.35500000e+01, 6.54333333e+00, 4.33333333e-03, 0.0, 0.0, 0.0]
+        phantom_pose = [-3.35500000e+01, -6.54333333e+00, 4.33333333e-03, 0.0, 0.0, 0.0]
         
         self.mpm_object.init(
             position=phantom_pose[:3],

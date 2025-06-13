@@ -7,7 +7,7 @@ import numpy as np
 import math
 
 off_screen = False
-enable_gui1 = True
+enable_gui1 = False
 enable_gui2 = False
 enable_gui3 = False
 
@@ -29,11 +29,11 @@ class ContactVisualisation:
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
         key_points_npy = np.array([
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
-            [1.0, 1.0, 0.0],
+            [33.5,  6.5,  0. ],
+            [48.5,  6.5,  0. ],
+            [33.5, 19.5,  0. ],
+            [33.5,  6.5,  1.3],
+            [41.,  13.,   1.3],
         ])
         key_point_colours_npy = np.array([
             [1.0, 1.0, 1.0],
@@ -191,9 +191,9 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(10, 0, 10)
-        camera.up(0, 1, 0)
-        camera.lookat(0.0, 0.0, 0.0)
+        camera.position(42.51137817, 11.69013892, 4.3)
+        camera.up(0, 0, 1)
+        camera.lookat(41., 13., 1.3)
         camera.fov(34)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
@@ -216,8 +216,8 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
     gui1, gui2, gui3, camera, scene, window, canvas = gui_tuple
 
     if True:
-        a = 2.5
-        b = 3.0
+        a = 41.
+        b = 13.
         r = 20.0
         p = ts / num_frames
 
@@ -225,7 +225,7 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
         x = a + r * math.cos(theta)
         y = b + r * math.sin(theta)
 
-        camera.position(x, 0.0, y)
+        camera.position(x, y, 4.3)
 
     viz_scale = 0.1
     viz_offset = [0.25, 0.25]
@@ -275,11 +275,11 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
         scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
         contact_model.draw_3d_scene(0)
         particle_radius = 0.02
-        # scene.particles(
-        #     contact_model.phantom_points,
-        #     color=(0.0, 0.0, 1.0),
-        #     radius=0.005,
-        # )
+        scene.particles(
+            contact_model.phantom_points,
+            color=(0.0, 0.0, 1.0),
+            radius=0.005,
+        )
         scene.particles(
             contact_model.sensor_points,
             color=(1.0, 1.0, 0.0),
