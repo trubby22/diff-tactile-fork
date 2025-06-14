@@ -8,7 +8,7 @@ import math
 
 off_screen = False
 enable_gui1 = False
-enable_gui2 = False
+enable_gui2 = True
 enable_gui3 = False
 
 class ContactVisualisation:

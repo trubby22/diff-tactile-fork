@@ -13,7 +13,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 RUN_ON_LAB_MACHINE = True
-SLOW_DOWN = 5
+SLOW_DOWN = 0.5
 SPEED_1_MM_S = 4.0828765820486765 / SLOW_DOWN
 SPEED_2_DEG_S = 81.63 / SLOW_DOWN
 TIME_STEPS_PER_S = 10 * SLOW_DOWN
@@ -82,14 +82,13 @@ class Contact(ContactVisualisation):
         self.squared_error_sum[None] = 0
 
         self.set_up_target_marker_positions()
-        self.target_marker_positions_current_frame = ti.Vector.field(2, dtype=ti.f32, shape=(self.experiment_num_markers), needs_grad=False)
         self.init_visualisation()
 
         self.trajectory_frame_ix = ti.field(dtype=float, shape=(), needs_grad=False)
         self.trajectory_frame_ix[None] = 0
 
         self.skip_frames = ti.field(dtype=float, shape=(), needs_grad=False)
-        self.skip_frames[None] = 100
+        self.skip_frames[None] = 0
 
         self.velocities_npy = np.array([
             [0, SPEED_1_MM_S, 0, 0, 0, 0],
@@ -104,8 +103,11 @@ class Contact(ContactVisualisation):
         self.velocities.from_numpy(self.velocities_npy)
         self.time_durations_s.from_numpy(self.time_durations_s_npy)
 
-        self.motion_start_end_ixs = ti.field(dtype=int, shape=self.velocities_npy.shape[0] + 1, needs_grad=False)
         self.fill_out_motion_start_end_ixs()
+
+        self.interpolation_exp_frame_start = ti.field(dtype=ti.i32, shape=(), needs_grad=False)
+        self.interpolation_exp_frame_end = ti.field(dtype=ti.i32, shape=(), needs_grad=False)
+        self.interpolation_alpha = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
 
     def set_up_initial_positions(self):
         phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
@@ -125,6 +127,7 @@ class Contact(ContactVisualisation):
         self.phantom_initial_position[0] = ti.Vector(phantom_pose[:3])
 
     def fill_out_motion_start_end_ixs(self):
+        self.motion_start_end_ixs = ti.field(dtype=int, shape=self.velocities_npy.shape[0] + 1, needs_grad=False)
         i = self.skip_frames[None]
         res = [i]
         for j in range(self.time_durations_s_npy.shape[0]):
@@ -132,6 +135,12 @@ class Contact(ContactVisualisation):
             res.append(i)
         res_npy = np.array(res, dtype=int)
         self.motion_start_end_ixs.from_numpy(res_npy)
+
+        arr = np.array([
+            3, 8, 13
+        ], dtype=int)
+        self.motion_start_end_experimental_video_frame_ixs = ti.field(dtype=int, shape=self.velocities_npy.shape[0] + 1, needs_grad=False)
+        self.motion_start_end_experimental_video_frame_ixs.from_numpy(arr)
 
     @ti.kernel
     def set_up_trajectory(self):
@@ -328,23 +337,47 @@ class Contact(ContactVisualisation):
             for exp_idx, sim_idx in index_mapping.items():
                 reordered_markers[frame_idx, sim_idx] = marker_data[frame_idx, exp_idx]
 
-        self.target_marker_positions = reordered_markers
+        self.target_marker_positions = ti.Vector.field(
+            2, dtype=ti.f32, shape=(self.experiment_num_frames, self.experiment_num_markers), needs_grad=True
+        )
+        self.target_marker_positions.from_numpy(reordered_markers)
 
-    def load_markers(self, f: ti.i32):
-        self.target_marker_positions_current_frame.from_numpy(self.target_marker_positions[f])
+    @ti.kernel
+    def interpolate_experimental_video(self, f: ti.i32):
+        # Find which motion segment this frame falls into
+        motion_segment = -1
+        for i in range(self.motion_start_end_ixs.shape[0] - 1):
+            if f >= self.motion_start_end_ixs[i] and f < self.motion_start_end_ixs[i + 1] and motion_segment == -1:
+                motion_segment = i
+        
+        # Get the experimental video frame indices for this motion segment
+        self.interpolation_exp_frame_start[None] = self.motion_start_end_experimental_video_frame_ixs[motion_segment]
+        self.interpolation_exp_frame_end[None] = self.motion_start_end_experimental_video_frame_ixs[motion_segment + 1]
+        
+        # Calculate interpolation factor based on relative position in motion segment
+        sim_segment_start = self.motion_start_end_ixs[motion_segment]
+        sim_segment_end = self.motion_start_end_ixs[motion_segment + 1]
+        self.interpolation_alpha[None] = (f - sim_segment_start) / (sim_segment_end - sim_segment_start)
 
     @ti.kernel
     def compute_marker_loss_1(self, f: ti.i32):
         """
         Compute RMSE loss between experimental and simulated marker positions for a given frame.
+        Uses linear interpolation between experimental video frames based on motion segments.
         
         Args:
             f: Index of the frame to compute loss for
         """
         # Iterate through all markers and accumulate squared errors
         for i in range(self.fem_sensor1.num_markers):
-            # Get experimental and simulated marker positions
-            exp_marker = self.target_marker_positions_current_frame[i]
+            # Get experimental marker positions at start and end of segment
+            exp_marker_start = self.target_marker_positions[self.interpolation_exp_frame_start[None], i]
+            exp_marker_end = self.target_marker_positions[self.interpolation_exp_frame_end[None], i]
+            
+            # Interpolate experimental marker position
+            exp_marker = exp_marker_start * (1 - self.interpolation_alpha[None]) + exp_marker_end * self.interpolation_alpha[None]
+            
+            # Get simulated marker position
             sim_marker = self.fem_sensor1.virtual_markers[i]
             
             # Compute squared error for this marker pair
@@ -352,7 +385,7 @@ class Contact(ContactVisualisation):
             dy = exp_marker[1] - sim_marker[1]
             squared_error = dx * dx + dy * dy
             self.squared_error_sum[None] += squared_error
-            
+
     @ti.kernel
     def compute_marker_loss_2(self):
         # Compute RMSE and add to total loss
@@ -370,8 +403,8 @@ def main():
 
     phantom_name = "suturing-phantom.stl"
     num_sub_frames = 50
-    num_frames = 600
-    num_opt_steps = 5
+    num_frames = 100
+    num_opt_steps = 10
     dt = 5e-5
     contact_model = Contact(
         dt=dt,
@@ -391,7 +424,6 @@ def main():
         contact_model.set_up_initial_positions()
         contact_model.clear_all_grad()
         for ts in range(num_frames - 1):
-            contact_model.load_markers(ts)
             contact_model.set_pos_control(ts)
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_control_vel(0)
@@ -400,22 +432,24 @@ def main():
             for ss in range(num_sub_frames - 1):
                 contact_model.update(ss)
             contact_model.memory_to_cache(ts)
-            print("# FP Iter ", ts)
+            # print("# FP Iter ", ts)
             if ts == 0:
                 dome_tip_ix = contact_model.fem_sensor1.get_min_z_ix_from_cache(ts)
             xyz, _ = contact_model.fem_sensor1.get_xyz_angle_from_cache(ts, dome_tip_ix)
             contact_model.compute_contact_force(num_sub_frames - 2)
             form_loss = contact_model.loss[None]
+            # print("contact force: ", contact_model.predict_force1[None])
+            # if ts >= 100 and ts < 500:
+            contact_model.interpolate_experimental_video(ts)
             contact_model.compute_marker_loss_1(ts)
             contact_model.compute_marker_loss_2()
-            print("contact force: ", contact_model.predict_force1[None])
-            print("marker loss", contact_model.loss[None] - form_loss)
+            # print("marker loss", contact_model.loss[None] - form_loss)
 
             update_gui(contact_model, gui_tuple, num_frames, ts, xyz)
 
         loss_trajectory = 0
         for ts in range(num_frames - 2, -1, -1):
-            print("BP", ts)
+            # print("BP", ts)
             contact_model.clear_all_grad()
             contact_model.compute_marker_loss_2.grad()
             contact_model.compute_marker_loss_1.grad(ts)
@@ -434,12 +468,12 @@ def main():
             grad_mu = contact_model.fem_sensor1.mu.grad[None]
             grad_lam = contact_model.fem_sensor1.lam.grad[None]
 
-            lr_friction_coeff = 1e-3
-            lr_kn = 1e-3
-            lr_kd = 1e-3
-            lr_kt = 1e-3
-            lr_mu = 1e-3
-            lr_lam = 1e-3
+            lr_friction_coeff = 1e3
+            lr_kn = 1e3
+            lr_kd = 1e3
+            lr_kt = 1e3
+            lr_mu = 1e3
+            lr_lam = 1e3
 
             contact_model.friction_coeff[None] -= lr_friction_coeff * grad_friction_coeff
             contact_model.kn[None] -= lr_kn * grad_kn
@@ -449,18 +483,9 @@ def main():
             contact_model.fem_sensor1.lam[None] -= lr_lam * grad_lam
 
             loss_trajectory += contact_model.loss[None]
-            print("# BP Iter: ", ts, " loss: ", contact_model.loss[None])
-            print("P/O grads: ", grad_friction_coeff, grad_kn, grad_kd, grad_kt, grad_mu, grad_lam)
-            print(
-                "P/O updated",
-                f'friction: {contact_model.friction_coeff[None]:.2f}',
-                f'kn: {contact_model.kn[None]:.2f}',
-                f'kd: {contact_model.kd[None]:.2f}',
-                f'kt: {contact_model.kt[None]:.2f}',
-                f'mu: {contact_model.fem_sensor1.mu[None]:.2f}',
-                f'lam: {contact_model.fem_sensor1.lam[None]:.2f}',
-                sep=', '
-            )
+            # print("# BP Iter: ", ts, " loss: ", contact_model.loss[None])
+            # print("P/O grads: ", grad_friction_coeff, grad_kn, grad_kd, grad_kt, grad_mu, grad_lam)
+            
             if (ts - 1) >= 0:
                 contact_model.memory_from_cache(ts - 1)
                 contact_model.set_pos_control(ts - 1)
@@ -471,6 +496,16 @@ def main():
                 for ss in range(num_sub_frames - 1):
                     contact_model.update(ss)
             update_gui(contact_model, gui_tuple, num_frames, ts, (0, 0, 0))
+        print(
+            "P/O updated",
+            f'friction: {contact_model.friction_coeff[None]:.2f}',
+            f'kn: {contact_model.kn[None]:.2f}',
+            f'kd: {contact_model.kd[None]:.2f}',
+            f'kt: {contact_model.kt[None]:.2f}',
+            f'mu: {contact_model.fem_sensor1.mu[None]:.2f}',
+            f'lam: {contact_model.fem_sensor1.lam[None]:.2f}',
+            sep=', '
+        )
         losses.append(loss_trajectory)
         if loss_trajectory <= np.min(losses):
             best_friction_coeff = contact_model.friction_coeff.to_numpy()
