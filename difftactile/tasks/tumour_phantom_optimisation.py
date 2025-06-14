@@ -13,6 +13,9 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 RUN_ON_LAB_MACHINE = True
+SPEED_1_MM_S = 4.0828765820486765
+SPEED_2_DEG_S = 81.63
+TIME_STEPS_PER_S = 10
 
 @ti.data_oriented
 class Contact(ContactVisualisation):
@@ -81,9 +84,25 @@ class Contact(ContactVisualisation):
         self.target_marker_positions_current_frame = ti.Vector.field(2, dtype=ti.f32, shape=(self.experiment_num_markers), needs_grad=False)
         self.init_visualisation()
 
+        self.trajectory_frame_ix = ti.field(dtype=float, shape=(), needs_grad=False)
+        self.trajectory_frame_ix[None] = 0
+
+        velocities_npy = np.array([
+            [0, SPEED_1_MM_S, 0, 0, 0, 0],
+            [SPEED_1_MM_S, 0, 0, 0, 0, 0],
+        ], dtype=float)
+        time_durations_s_npy = np.array([
+            10,
+            10,
+        ], dtype=float)
+        self.velocities = ti.Vector.field(6, dtype=ti.f32, shape=velocities_npy.shape[0], needs_grad=False)
+        self.time_durations_s = ti.field(dtype=ti.f32, shape=time_durations_s_npy.shape[0], needs_grad=False)
+        self.velocities.from_numpy(velocities_npy)
+        self.time_durations_s.from_numpy(time_durations_s_npy)
+
     def set_up_initial_positions(self):
-        phantom_pose = [12.50, 11.50, 2.05625, 0.0, 0.0, 0.0]
-        tactile_sensor_pose = [12.50, 11.50, 6.30625, -90.0, 0.0, 0.0]
+        phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
+        tactile_sensor_pose = [12.5, 11.5, 6.30625, -90, 0, 0]
         
         self.mpm_object.init(
             position=phantom_pose[:3],
@@ -100,13 +119,19 @@ class Contact(ContactVisualisation):
 
     @ti.kernel
     def set_up_trajectory(self):
-        velocity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-        vx1, vy1, vz1 = velocity[:3]
-        rx1, ry1, rz1 = velocity[3:]
-        for i in range(0, self.num_frames):
-            self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
-            self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
+        for i in range(self.velocities.shape[0]):
+            velocity = self.velocities[i]
+            vx1, vy1, vz1 = velocity[:3]
+            rx1, ry1, rz1 = velocity[3:]
+            time_steps = self.time_durations_s[i] * TIME_STEPS_PER_S
+            for j in range(self.trajectory_frame_ix[None], self.trajectory_frame_ix[None] + time_steps):
+                self.p_sensor1[j] = ti.Vector([vx1, vy1, vz1], dt=ti.f32)
+                self.o_sensor1[j] = ti.Vector([rx1, ry1, rz1], dt=ti.f32)
+            self.trajectory_frame_ix[None] += time_steps
+        
+        for i in range(self.trajectory_frame_ix[None], self.num_frames):
+            self.p_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
+            self.o_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
 
     @ti.kernel
     def set_pos_control(self, f: ti.i32):
@@ -334,7 +359,7 @@ def main():
 
     phantom_name = "suturing-phantom.stl"
     num_sub_frames = 50
-    num_frames = 2_000
+    num_frames = 1_050
     num_opt_steps = 5
     dt = 5e-5
     contact_model = Contact(
@@ -345,6 +370,7 @@ def main():
     )
     contact_model.draw_table()
     contact_model.set_up_trajectory()
+    xyz = (0, 0, 0)
     for opts in range(num_opt_steps):
         print("Opt # step ======================", opts)
         contact_model.set_up_initial_positions()
@@ -358,13 +384,21 @@ def main():
             for ss in range(num_sub_frames - 1):
                 contact_model.update(ss)
             contact_model.memory_to_cache(ts)
-            print("# FP Iter ", ts)
+            # print("# FP Iter ", ts)
+            if ts == 0:
+                angle_point_ix = contact_model.fem_sensor1.get_angle_index_from_cache(ts)
+            xyz, angle = contact_model.fem_sensor1.get_xyz_angle_from_cache(ts, angle_point_ix)
+            if (ts + 1) % 100 == 0:
+                # sensor_dome_tip_z = contact_model.fem_sensor1.get_min_z_from_cache(ts)
+                # print(f'time steps completed: {ts + 1}; sensor_dome_tip_z: {sensor_dome_tip_z}')
+                print(f'time steps completed: {ts + 1}; xyz: {xyz}, angle: {angle}')
             contact_model.compute_contact_force(num_sub_frames - 2)
 
-            update_gui(contact_model, gui_tuple, num_frames, ts)
+            update_gui(contact_model, gui_tuple, num_frames, ts, xyz)
 
+        print("BP")
         for ts in range(num_frames - 2, -1, -1):
-            print("BP", ts)
+            # print("BP", ts)
             contact_model.clear_all_grad()
             contact_model.compute_contact_force.grad(num_sub_frames - 2)
             for ss in range(num_sub_frames - 2, -1, -1):
@@ -383,7 +417,7 @@ def main():
                 contact_model.reset()
                 for ss in range(num_sub_frames - 1):
                     contact_model.update(ss)
-            update_gui(contact_model, gui_tuple, num_frames, ts)
+            update_gui(contact_model, gui_tuple, num_frames, ts, (0, 0, 0))
 
 
 if __name__ == "__main__":

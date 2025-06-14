@@ -569,3 +569,89 @@ class FEMDomeSensor:
                 self.pos.grad[t, p].fill(0.0)
                 self.vel.grad[t, p].fill(0.0)
                 self.virtual_pos.grad[t, p].fill(0.0)
+
+    def get_min_z_from_cache(self, t):
+        """Returns the minimum z-coordinate from the cached positions at timestep t.
+        
+        Args:
+            t (int): The timestep to get the minimum z-coordinate from
+            
+        Returns:
+            float: The minimum z-coordinate across all vertices
+        """
+        cur_step_name = f'{t:06d}'
+        if cur_step_name not in self.cache:
+            raise KeyError(f"No cached data found for timestep {t}")
+            
+        # Get the z-coordinates (third column) and find minimum
+        z_coords = self.cache[cur_step_name]['pos'][:, 2]
+        return float(z_coords.min().item())
+
+    def get_angle_index_from_cache(self, t):
+        """Returns the index of the point that has maximum y-coordinate among points
+        whose z-coordinate is within 0.2 of the maximum z value.
+        
+        Args:
+            t (int): The timestep to get the point index from
+            
+        Returns:
+            int: The index of the vertex that meets the criteria
+        """
+        cur_step_name = f'{t:06d}'
+        if cur_step_name not in self.cache:
+            raise KeyError(f"No cached data found for timestep {t}")
+            
+        # Get all positions
+        positions = self.cache[cur_step_name]['pos']
+        
+        # Get z-coordinates and find maximum
+        z_coords = positions[:, 2]
+        max_z = float(z_coords.max().item())
+        
+        # Create mask for points within 0.2 of max z
+        z_mask = (z_coords >= (max_z - 0.2))
+        
+        # Get y-coordinates of points that meet z criteria
+        y_coords = positions[:, 1]
+        y_coords_filtered = y_coords.clone()
+        y_coords_filtered[~z_mask] = float('-inf')  # Set non-matching points to negative infinity
+        
+        # Find index of maximum y among filtered points
+        return int(y_coords_filtered.argmax().item())
+
+    def get_xyz_angle_from_cache(self, t, idx):
+        """Returns the x and y coordinates of a point from the cached positions at timestep t,
+        and computes the angle this point forms with a reference point, assuming the point lies
+        on a circle centered at the reference point.
+        
+        Args:
+            t (int): The timestep to get the coordinates from
+            idx (int): The index of the point to get coordinates for
+            ref_x (float): x-coordinate of the reference point (center of circle)
+            ref_y (float): y-coordinate of the reference point (center of circle)
+            
+        Returns:
+            tuple: (x, y, angle) where:
+                - x, y are the coordinates as floats
+                - angle is in degrees, measured counterclockwise from positive x-axis
+        """
+        cur_step_name = f'{t:06d}'
+        if cur_step_name not in self.cache:
+            raise KeyError(f"No cached data found for timestep {t}")
+            
+        if idx < 0 or idx >= self.n_verts:
+            raise ValueError(f"Index {idx} out of bounds. Must be between 0 and {self.n_verts-1}")
+            
+        # Get the x and y coordinates (first and second columns)
+        point = self.cache[cur_step_name]['pos'][idx]
+        x = float(point[0].item())
+        y = float(point[1].item())
+        z = float(point[2].item())
+        
+        # Compute angle using atan2 and convert to degrees
+        dx = x - 12.50
+        dy = y - 11.50
+        angle_rad = np.arctan2(dy, dx)
+        
+        return (x, y, z), angle_rad
+

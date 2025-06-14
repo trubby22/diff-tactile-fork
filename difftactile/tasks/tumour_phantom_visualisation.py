@@ -29,19 +29,20 @@ class ContactVisualisation:
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
         key_points_npy = np.array([
-            [5, 5, 5],
-            [5, 5, 0],
-            [5, 5, -5],
+            [12.50, 11.50, 21.00625],
+            # [12.50, 11.50, 21.00625 - 5],
+            # [12.50, 11.50, 21.00625 - 10],
         ], dtype=float)
         key_point_colours_npy = np.array([
             [1, 1, 1],
-            [1, 0, 0],
-            [0, 1, 0],
+            # [1, 0, 0],
+            # [0, 1, 0],
         ], dtype=float)
         self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=key_points_npy.shape[0], needs_grad=False)
         self.key_point_colours = ti.Vector.field(3, dtype=ti.f32, shape=key_point_colours_npy.shape[0], needs_grad=False)
         self.key_points.from_numpy(key_points_npy)
         self.key_point_colours.from_numpy(key_point_colours_npy)
+        self.key_point = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
 
     def draw_markers(self, init_markers, cur_markers, gui):
         img_height = 480
@@ -187,9 +188,9 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(5, -35, 0)
-        camera.up(0, 0, 1)
-        camera.lookat(5, 5, 0)
+        camera.position(12.50, 11.50, 21.00625 + 40)
+        camera.up(0, 1, 0)
+        camera.lookat(12.50, 11.50, 21.00625)
         camera.fov(34)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
@@ -206,10 +207,12 @@ def set_up_gui():
         
         return (gui1, gui2, gui3, camera, scene, window, canvas)
 
-def update_gui(contact_model, gui_tuple, num_frames, ts):
+def update_gui(contact_model, gui_tuple, num_frames, ts, xyz):
     if off_screen:
         return
     gui1, gui2, gui3, camera, scene, window, canvas = gui_tuple
+
+    contact_model.key_point[0] = ti.Vector(xyz)
 
     if False:
         a = 12.50
@@ -316,6 +319,11 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
             scene.particles(
                 contact_model.key_points,
                 per_vertex_color=contact_model.key_point_colours,
+                radius=key_point_radius,
+            )
+            scene.particles(
+                contact_model.key_point,
+                color=(0, 1, 1),
                 radius=key_point_radius,
             )
         canvas.scene(scene)
