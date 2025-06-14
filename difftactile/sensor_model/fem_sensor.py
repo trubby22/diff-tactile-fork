@@ -35,7 +35,7 @@ class FEMDomeSensor:
         self.dx = 2 * np.pi * self.inner_radius**2 / self.N_node
         self.vol = self.dx * self.t_res
         print(f'self.dx: {self.dx}; self.vol: {self.vol}')
-        self.rho = 2000.0e0 # density
+        self.rho = 1.145 * 1_000 # density [kg / m^3]
         self.mass = self.vol * self.rho
         self.eps = 1e-10
 
@@ -586,6 +586,23 @@ class FEMDomeSensor:
         # Get the z-coordinates (third column) and find minimum
         z_coords = self.cache[cur_step_name]['pos'][:, 2]
         return float(z_coords.min().item())
+
+    def get_min_z_ix_from_cache(self, t):
+        """Returns the minimum z-coordinate from the cached positions at timestep t.
+        
+        Args:
+            t (int): The timestep to get the minimum z-coordinate from
+            
+        Returns:
+            float: The minimum z-coordinate across all vertices
+        """
+        cur_step_name = f'{t:06d}'
+        if cur_step_name not in self.cache:
+            raise KeyError(f"No cached data found for timestep {t}")
+            
+        # Get the z-coordinates (third column) and find minimum
+        z_coords = self.cache[cur_step_name]['pos'][:, 2]
+        return z_coords.argmin().item()
 
     def get_angle_index_from_cache(self, t):
         """Returns the index of the point that has maximum y-coordinate among points
