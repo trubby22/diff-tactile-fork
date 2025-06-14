@@ -82,8 +82,8 @@ class Contact(ContactVisualisation):
         self.init_visualisation()
 
     def set_up_initial_positions(self):
-        phantom_pose = [12.50, 11.50, 5.65, 0.0, 0.0, 0.0]
-        tactile_sensor_pose = [12.50, 11.50, 9.90, -90.0, 0.0, 0.0]
+        phantom_pose = [12.50, 11.50, 2.05625, 0.0, 0.0, 0.0]
+        tactile_sensor_pose = [12.50, 11.50, 6.30625, -90.0, 0.0, 0.0]
         
         self.mpm_object.init(
             position=phantom_pose[:3],
@@ -100,7 +100,7 @@ class Contact(ContactVisualisation):
 
     @ti.kernel
     def set_up_trajectory(self):
-        velocity = [0.0, 16.0, 0.0, 0.0, 0.0, 0.0]
+        velocity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         vx1, vy1, vz1 = velocity[:3]
         rx1, ry1, rz1 = velocity[3:]
@@ -334,7 +334,7 @@ def main():
 
     phantom_name = "suturing-phantom.stl"
     num_sub_frames = 50
-    num_frames = 600
+    num_frames = 2_000
     num_opt_steps = 5
     dt = 5e-5
     contact_model = Contact(
@@ -343,16 +343,13 @@ def main():
         num_sub_frames=num_sub_frames,
         obj=phantom_name,
     )
-    # losses = []
     contact_model.draw_table()
     contact_model.set_up_trajectory()
-    # form_loss = 0
     for opts in range(num_opt_steps):
         print("Opt # step ======================", opts)
         contact_model.set_up_initial_positions()
         contact_model.clear_all_grad()
         for ts in range(num_frames - 1):
-            # contact_model.load_markers(ts)
             contact_model.set_pos_control(ts)
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_control_vel(0)
@@ -363,21 +360,12 @@ def main():
             contact_model.memory_to_cache(ts)
             print("# FP Iter ", ts)
             contact_model.compute_contact_force(num_sub_frames - 2)
-            # form_loss = contact_model.loss[None]
-            # contact_model.compute_marker_loss_1(ts)
-            # contact_model.compute_marker_loss_2()
-            # print("contact force: ", contact_model.predict_force1[None])
-            # print("marker loss", contact_model.loss[None] - form_loss)
 
             update_gui(contact_model, gui_tuple, num_frames, ts)
 
-        loss_trajectory = 0
         for ts in range(num_frames - 2, -1, -1):
-            # contact_model.load_markers(ts)
             print("BP", ts)
             contact_model.clear_all_grad()
-            # contact_model.compute_marker_loss_2.grad()
-            # contact_model.compute_marker_loss_1.grad(ts)
             contact_model.compute_contact_force.grad(num_sub_frames - 2)
             for ss in range(num_sub_frames - 2, -1, -1):
                 contact_model.update_grad(ss)
@@ -386,40 +374,6 @@ def main():
             contact_model.fem_sensor1.set_pose_control.grad()
             contact_model.set_pos_control.grad(ts)
 
-            # grad_friction_coeff = contact_model.friction_coeff.grad[None]
-            # grad_kn = contact_model.kn.grad[None]
-            # grad_kd = contact_model.kd.grad[None]
-            # grad_kt = contact_model.kt.grad[None]
-            # grad_mu = contact_model.fem_sensor1.mu.grad[None]
-            # grad_lam = contact_model.fem_sensor1.lam.grad[None]
-
-            # lr_friction_coeff = 1e-3
-            # lr_kn = 1e-3
-            # lr_kd = 1e-3
-            # lr_kt = 1e-3
-            # lr_mu = 1e-3
-            # lr_lam = 1e-3
-
-            # contact_model.friction_coeff[None] -= lr_friction_coeff * grad_friction_coeff
-            # contact_model.kn[None] -= lr_kn * grad_kn
-            # contact_model.kd[None] -= lr_kd * grad_kd
-            # contact_model.kt[None] -= lr_kt * grad_kt
-            # contact_model.fem_sensor1.mu[None] -= lr_mu * grad_mu
-            # contact_model.fem_sensor1.lam[None] -= lr_lam * grad_lam
-
-            # loss_trajectory += contact_model.loss[None]
-            # print("# BP Iter: ", ts, " loss: ", contact_model.loss[None])
-            # print("P/O grads: ", grad_friction_coeff, grad_kn, grad_kd, grad_kt, grad_mu, grad_lam)
-            # print(
-            #     "P/O updated",
-            #     f'friction: {contact_model.friction_coeff[None]:.2f}',
-            #     f'kn: {contact_model.kn[None]:.2f}',
-            #     f'kd: {contact_model.kd[None]:.2f}',
-            #     f'kt: {contact_model.kt[None]:.2f}',
-            #     f'mu: {contact_model.fem_sensor1.mu[None]:.2f}',
-            #     f'lam: {contact_model.fem_sensor1.lam[None]:.2f}',
-            #     sep=', '
-            # )
             if (ts - 1) >= 0:
                 contact_model.memory_from_cache(ts - 1)
                 contact_model.set_pos_control(ts - 1)
@@ -430,20 +384,6 @@ def main():
                 for ss in range(num_sub_frames - 1):
                     contact_model.update(ss)
             update_gui(contact_model, gui_tuple, num_frames, ts)
-        # losses.append(loss_trajectory)
-        # if loss_trajectory <= np.min(losses):
-        #     best_friction_coeff = contact_model.friction_coeff.to_numpy()
-        #     best_kn = contact_model.kn.to_numpy()
-        #     best_kd = contact_model.kd.to_numpy()
-        #     best_kt = contact_model.kt.to_numpy()
-        #     best_mu = contact_model.fem_sensor1.mu.to_numpy()
-        #     best_lam = contact_model.fem_sensor1.lam.to_numpy()
-    # print('best_friction_coeff', best_friction_coeff)
-    # print('best_kn', best_kn)
-    # print('best_kd', best_kd)
-    # print('best_kt', best_kt)
-    # print('best_mu', best_mu)
-    # print('best_lam', best_lam)
 
 
 if __name__ == "__main__":

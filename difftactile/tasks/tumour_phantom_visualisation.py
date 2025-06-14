@@ -29,17 +29,15 @@ class ContactVisualisation:
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
         key_points_npy = np.array([
-            [5.00, 5.00, 5.00],
-            [20.00, 5.00, 5.00],
-            [5.00, 18.00, 5.00],
-            [5.00, 5.00, 6.30],
-        ])
+            [5, 5, 5],
+            [5, 5, 0],
+            [5, 5, -5],
+        ], dtype=float)
         key_point_colours_npy = np.array([
-            [1.0, 1.0, 1.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ])
+            [1, 1, 1],
+            [1, 0, 0],
+            [0, 1, 0],
+        ], dtype=float)
         self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=key_points_npy.shape[0], needs_grad=False)
         self.key_point_colours = ti.Vector.field(3, dtype=ti.f32, shape=key_point_colours_npy.shape[0], needs_grad=False)
         self.key_points.from_numpy(key_points_npy)
@@ -189,9 +187,9 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(14.01, 10.19, 9.30)
+        camera.position(5, -35, 0)
         camera.up(0, 0, 1)
-        camera.lookat(12.50, 11.50, 6.30)
+        camera.lookat(5, 5, 0)
         camera.fov(34)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
@@ -213,7 +211,7 @@ def update_gui(contact_model, gui_tuple, num_frames, ts):
         return
     gui1, gui2, gui3, camera, scene, window, canvas = gui_tuple
 
-    if True:
+    if False:
         a = 12.50
         b = 11.50
         r = 20.0
