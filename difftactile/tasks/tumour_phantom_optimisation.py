@@ -39,7 +39,7 @@ class Contact(ContactVisualisation):
             obj_name=obj,
             space_scale=30.0,
             obj_scale=15.0,
-            density=1.50,
+            density=1.5,
             rho=1.07,
         )
         self.set_up_initial_positions()
@@ -378,7 +378,7 @@ class Contact(ContactVisualisation):
             exp_marker = exp_marker_start * (1 - self.interpolation_alpha[None]) + exp_marker_end * self.interpolation_alpha[None]
             
             # Get simulated marker position
-            sim_marker = self.fem_sensor1.virtual_markers[i]
+            sim_marker = self.fem_sensor1.predict_markers[i]
             
             # Compute squared error for this marker pair
             dx = exp_marker[0] - sim_marker[0]
@@ -438,22 +438,29 @@ def main():
             xyz, _ = contact_model.fem_sensor1.get_xyz_angle_from_cache(ts, dome_tip_ix)
             contact_model.compute_contact_force(num_sub_frames - 2)
             form_loss = contact_model.loss[None]
-            # print("contact force: ", contact_model.predict_force1[None])
-            # if ts >= 100 and ts < 500:
             contact_model.interpolate_experimental_video(ts)
             contact_model.compute_marker_loss_1(ts)
             contact_model.compute_marker_loss_2()
-            # print("marker loss", contact_model.loss[None] - form_loss)
-
+            # print(f"Frame {ts} loss components:")
+            # print(f"squared_error_sum: {contact_model.squared_error_sum[None]}")
+            # print(f"total loss: {contact_model.loss[None] - form_loss}")
             update_gui(contact_model, gui_tuple, num_frames, ts, xyz)
 
         loss_trajectory = 0
         for ts in range(num_frames - 2, -1, -1):
-            # print("BP", ts)
             contact_model.clear_all_grad()
-            contact_model.compute_marker_loss_2.grad()
-            contact_model.compute_marker_loss_1.grad(ts)
-            contact_model.compute_contact_force.grad(num_sub_frames - 2)
+            if True:
+                contact_model.compute_marker_loss_2.grad()
+                # print(f"After marker_loss_2.grad():")
+                # print(f"squared_error_sum.grad: {contact_model.squared_error_sum.grad[None]}")
+
+                contact_model.compute_marker_loss_1.grad(ts)
+                # print(f"After marker_loss_1.grad():")
+                # print(f"predict_markers.grad: {contact_model.fem_sensor1.predict_markers.grad[0]}")
+
+                contact_model.compute_contact_force.grad(num_sub_frames - 2)
+                # print(f"After contact_force.grad():")
+                # print(f"external_force_field.grad: {contact_model.fem_sensor1.external_force_field.grad[num_sub_frames-2, 0]}")
             for ss in range(num_sub_frames - 2, -1, -1):
                 contact_model.update_grad(ss)
             contact_model.fem_sensor1.set_vel.grad(0)
@@ -467,6 +474,15 @@ def main():
             grad_kt = contact_model.kt.grad[None]
             grad_mu = contact_model.fem_sensor1.mu.grad[None]
             grad_lam = contact_model.fem_sensor1.lam.grad[None]
+
+            print(f"Gradients at timestep {ts}:")
+            print(f"kn grad: {contact_model.kn.grad[None]}")
+            print(f"kd grad: {contact_model.kd.grad[None]}")
+            print(f"kt grad: {contact_model.kt.grad[None]}")
+            print(f"friction_coeff grad: {contact_model.friction_coeff.grad[None]}")
+            print(f"mu grad: {contact_model.fem_sensor1.mu.grad[None]}")
+            print(f"lam grad: {contact_model.fem_sensor1.lam.grad[None]}")
+            print()
 
             lr_friction_coeff = 1e3
             lr_kn = 1e3
@@ -483,8 +499,6 @@ def main():
             contact_model.fem_sensor1.lam[None] -= lr_lam * grad_lam
 
             loss_trajectory += contact_model.loss[None]
-            # print("# BP Iter: ", ts, " loss: ", contact_model.loss[None])
-            # print("P/O grads: ", grad_friction_coeff, grad_kn, grad_kd, grad_kt, grad_mu, grad_lam)
             
             if (ts - 1) >= 0:
                 contact_model.memory_from_cache(ts - 1)

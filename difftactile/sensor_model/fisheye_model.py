@@ -52,36 +52,6 @@ def project_points_to_pix(a, f=8.627e-04, m=173913.04, cx=3.320e+02, cy=2.400e+0
 
 def get_marker_image(img):
     params = cv2.SimpleBlobDetector_Params()
-    
-    # Basic thresholding parameters
-    # params.minThreshold = 0
-    # params.maxThreshold = 255
-    # params.thresholdStep = 1  # Smaller steps to catch more variations
-
-    # params.filterByArea = False
-    # params.filterByCircularity = False
-    # params.filterByConvexity = False # set this one to False, all other filters should have their default values
-    # params.filterByInertia = False
-    
-    # # Filter by Area
-    # params.filterByArea = True
-    # params.minArea = 20  # Smaller minimum area to catch low contrast markers
-    # params.maxArea = 500  # Larger maximum area to account for potential blur
-    
-    # # Filter by Circularity
-    # params.filterByCircularity = True
-    # params.minCircularity = 0.1  # More permissive circularity to catch donut shapes
-    
-    # # Filter by Convexity
-    # params.filterByConvexity = True
-    # params.minConvexity = 1 - 1 / (2 ** 4)  # More permissive convexity
-    
-    # # Filter by Inertia (elongation)
-    # params.filterByInertia = True
-    # params.minInertiaRatio = 0.01  # More permissive ratio to catch distorted shapes
-    
-    # # Crucial for donut detection: allow dark blobs on light background
-    # params.blobColor = 0
 
     detector = cv2.SimpleBlobDetector_create(params)
     keypoints = detector.detect(img)
