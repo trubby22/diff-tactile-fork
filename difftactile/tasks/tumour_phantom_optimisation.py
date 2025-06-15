@@ -419,6 +419,7 @@ def main():
     np.savetxt(f'output/trajectory.p_sensor1.csv', contact_model.p_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
     np.savetxt(f'output/trajectory.o_sensor1.csv', contact_model.o_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
     xyz = (0, 0, 0)
+    ti.root.lazy_grad()
     for opts in range(num_opt_steps):
         print("Opt # step ======================", opts)
         contact_model.set_up_initial_positions()

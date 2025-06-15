@@ -483,6 +483,7 @@ class FEMDomeSensor:
             self.pos[target, p] = self.pos[source, p]
             self.vel[target, p] = self.vel[source, p]
             self.virtual_pos[target, p] = self.virtual_pos[source, p]
+
     @ti.kernel
     def copy_grad(self, source: ti.i32, target: ti.i32):
         for p in range(self.n_verts):
@@ -491,7 +492,7 @@ class FEMDomeSensor:
             self.virtual_pos.grad[target, p] = self.virtual_pos.grad[source, p]
 
     @ti.kernel
-    def load_step_from_cache(self, f: ti.i32, cache_pos: ti.types.ndarray(), cache_vel: ti.types.ndarray(), cache_trans: ti.types.ndarray(), cache_virtual_pos: ti.types.ndarray(), cache_rot: ti.types.ndarray()):
+    def load_step_from_cache(self, f: ti.i32, cache_pos: ti.types.ndarray(), cache_vel: ti.types.ndarray(), cache_trans: ti.types.ndarray(), cache_virtual_pos: ti.types.ndarray(), cache_rot: ti.types.ndarray(), cache_predict_markers: ti.types.ndarray()):
         for j in range(4):
             for k in range(4):
                 self.trans_h[None][j,k] = cache_trans[j,k]
@@ -503,9 +504,12 @@ class FEMDomeSensor:
                 self.pos[f, p][i] = cache_pos[p,i]
                 self.vel[f, p][i] = cache_vel[p,i]
                 self.virtual_pos[f, p][i] = cache_virtual_pos[p, i]
+        for p in range(self.num_markers):
+            for i in ti.static(range(2)):
+                self.predict_markers[p][i] = cache_predict_markers[p,i]
 
     @ti.kernel
-    def add_step_to_cache(self, f: ti.i32, cache_pos: ti.types.ndarray(), cache_vel: ti.types.ndarray(), cache_trans: ti.types.ndarray(), cache_virtual_pos: ti.types.ndarray(), cache_rot: ti.types.ndarray()):
+    def add_step_to_cache(self, f: ti.i32, cache_pos: ti.types.ndarray(), cache_vel: ti.types.ndarray(), cache_trans: ti.types.ndarray(), cache_virtual_pos: ti.types.ndarray(), cache_rot: ti.types.ndarray(), cache_predict_markers: ti.types.ndarray()):
         for j in range(4):
             for k in range(4):
                 cache_trans[j,k] = self.trans_h[None][j,k]
@@ -517,6 +521,9 @@ class FEMDomeSensor:
                 cache_pos[p,i] = self.pos[f, p][i]
                 cache_vel[p,i] = self.vel[f, p][i]
                 cache_virtual_pos[p, i] = self.virtual_pos[f, p][i]
+        for p in range(self.num_markers):
+            for i in ti.static(range(2)):
+                cache_predict_markers[p,i] = self.predict_markers[p][i]
 
     def memory_to_cache(self, t):
         cur_step_name = f'{t:06d}'
@@ -528,7 +535,8 @@ class FEMDomeSensor:
         self.cache[cur_step_name]['trans_h'] = torch.zeros((4,4), dtype=TC_TYPE, device=device)
         self.cache[cur_step_name]['rot_h'] = torch.zeros((3,3), dtype=TC_TYPE, device=device)
         self.cache[cur_step_name]['virtual_pos'] = torch.zeros((self.n_verts, self.dim), dtype=TC_TYPE, device=device)
-        self.add_step_to_cache(0, self.cache[cur_step_name]['pos'], self.cache[cur_step_name]['vel'], self.cache[cur_step_name]['trans_h'], self.cache[cur_step_name]['virtual_pos'], self.cache[cur_step_name]['rot_h'])
+        self.cache[cur_step_name]['predict_markers'] = torch.zeros((self.num_markers, 2), dtype=TC_TYPE, device=device)
+        self.add_step_to_cache(0, self.cache[cur_step_name]['pos'], self.cache[cur_step_name]['vel'], self.cache[cur_step_name]['trans_h'], self.cache[cur_step_name]['virtual_pos'], self.cache[cur_step_name]['rot_h'], self.cache[cur_step_name]['predict_markers'])
         self.copy_frame(self.sub_steps-1, 0)
 
     def memory_from_cache(self, t):
@@ -538,7 +546,7 @@ class FEMDomeSensor:
         self.copy_grad(0, self.sub_steps-1)
         self.clear_step_grad(self.sub_steps-1)
 
-        self.load_step_from_cache(0, self.cache[cur_step_name]['pos'], self.cache[cur_step_name]['vel'], self.cache[cur_step_name]['trans_h'], self.cache[cur_step_name]['virtual_pos'], self.cache[cur_step_name]['rot_h'])
+        self.load_step_from_cache(0, self.cache[cur_step_name]['pos'], self.cache[cur_step_name]['vel'], self.cache[cur_step_name]['trans_h'], self.cache[cur_step_name]['virtual_pos'], self.cache[cur_step_name]['rot_h'], self.cache[cur_step_name]['predict_markers'])
 
     @ti.kernel
     def clear_loss_grad(self):

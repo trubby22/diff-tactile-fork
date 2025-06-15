@@ -273,16 +273,15 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, xyz):
         scene.ambient_light((0.8, 0.8, 0.8))
         scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
         contact_model.draw_3d_scene(0)
-        particle_radius = 0.02
         scene.particles(
             contact_model.phantom_points,
             color=(0.0, 0.0, 1.0),
-            radius=0.005,
+            radius=0.1,
         )
         scene.particles(
             contact_model.sensor_points,
             color=(1.0, 1.0, 0.0),
-            radius=particle_radius,
+            radius=0.1,
         )
         if False:
             print('contact_model.phantom_points')
@@ -304,18 +303,8 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, xyz):
             print(f'sensor min {sensor_min} max {sensor_max}')
 
             raise Exception("you shall not pass")
-        if True:
-            key_point_radius = particle_radius * 10
-            # scene.particles(
-            #     contact_model.tactile_sensor_initial_position,
-            #     color=(0.00, 1.00, 0.00),
-            #     radius=key_point_radius,
-            # )
-            # scene.particles(
-            #     contact_model.phantom_initial_position,
-            #     color=(1.0, 1.0, 0.0),
-            #     radius=key_point_radius,
-            # )
+        if False:
+            key_point_radius = 0.2
             scene.particles(
                 contact_model.key_points,
                 per_vertex_color=contact_model.key_point_colours,
