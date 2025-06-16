@@ -644,7 +644,7 @@ def main():
                     contact_model.compute_angle(ts)
                     # print("angle",  contact_model.angle[ts])
             
-            contact_model.compute_contact_force(num_sub_steps - 2)
+            contact_model.fem_sensor1.extract_markers(0)
             contact_model.compute_marker_loss_1(ts)
             contact_model.compute_marker_loss_2(ts)
 
@@ -653,7 +653,6 @@ def main():
             viz_offset = [0.0, 0.0]
             
             if not off_screen:
-                contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
                 marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
                 contact_model.draw_markers(init_2d, marker_2d, gui2)
@@ -664,14 +663,22 @@ def main():
                 gui2.show()
                 # gui3.show()
             
+            # if ts == 100:
+            #     print(f'forward {ts}')
+            #     print(contact_model.friction_coeff.grad[None])
+            #     print(contact_model.kn.grad[None])
+            #     print(contact_model.kd.grad[None])
+            #     print(contact_model.kt.grad[None])
+            #     print(contact_model.fem_sensor1.lam.grad[None])
+            #     print(contact_model.fem_sensor1.mu.grad[None])
+            #     print()
+
             if ts == 100:
                 print(f'forward {ts}')
-                print(contact_model.friction_coeff.grad[None])
-                print(contact_model.kn.grad[None])
-                print(contact_model.kd.grad[None])
-                print(contact_model.kt.grad[None])
-                print(contact_model.fem_sensor1.lam.grad[None])
-                print(contact_model.fem_sensor1.mu.grad[None])
+                print(contact_model.loss.grad[None])
+                print(contact_model.squared_error_sum.grad[ts])
+                print(contact_model.target_marker_positions.grad[ts, 0])
+                print(contact_model.fem_sensor1.predict_markers.grad[0])
                 print()
         ## backward!    
         loss_frame = 0
@@ -703,7 +710,15 @@ def main():
             
             contact_model.compute_marker_loss_2.grad(ts)
             contact_model.compute_marker_loss_1.grad(ts)
-            contact_model.compute_contact_force.grad(num_sub_steps - 2)
+            contact_model.fem_sensor1.extract_markers.grad(0)
+            if ts == 550 or ts == 500:
+                print(f'backward-1 {ts}')
+                print(contact_model.loss.grad[None])
+                print(contact_model.squared_error_sum.grad[ts])
+                print(contact_model.target_marker_positions.grad[ts, 0])
+                print(contact_model.fem_sensor1.predict_markers.grad[0])
+                print()
+
             
             for ss in range(num_sub_steps-2, -1, -1):
                 contact_model.update_grad(ss)
@@ -720,6 +735,16 @@ def main():
             ### optimization with grad backpropagation        
             grad_p1 = contact_model.p_sensor1.grad[ts]
             grad_o1 = contact_model.o_sensor1.grad[ts]
+
+            if ts == 550 or ts == 500:
+                print(f'backward-2 {ts}')
+                print(contact_model.fem_sensor1.lam.grad[None])
+                print(contact_model.fem_sensor1.mu.grad[None])
+                print(contact_model.friction_coeff.grad[None])
+                print(contact_model.kn.grad[None])
+                print(contact_model.kd.grad[None])
+                print(contact_model.kt.grad[None])
+                print()
      
 
             lr_p = 0.5e1
@@ -757,14 +782,15 @@ def main():
             gui2.show()
             # gui3.show()
 
-            if ts == 550 or ts == 500:
-                print(f'backward {ts}')
-                print(contact_model.friction_coeff.grad[None])
-                print(contact_model.kn.grad[None])
-                print(contact_model.kd.grad[None])
-                print(contact_model.kt.grad[None])
-                print(contact_model.fem_sensor1.lam.grad[None])
-                print(contact_model.fem_sensor1.mu.grad[None])
+            # if ts == 550 or ts == 500:
+            #     print(f'backward {ts}')
+            #     print(contact_model.friction_coeff.grad[None])
+            #     print(contact_model.kn.grad[None])
+            #     print(contact_model.kd.grad[None])
+            #     print(contact_model.kt.grad[None])
+            #     print(contact_model.fem_sensor1.lam.grad[None])
+            #     print(contact_model.fem_sensor1.mu.grad[None])
+            #     print()
 
         losses.append(loss_frame)
 
