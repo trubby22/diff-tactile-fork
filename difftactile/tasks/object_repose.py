@@ -27,12 +27,12 @@ NP_TYPE = np.float32
 
 @ti.data_oriented
 class Contact:
-    def __init__(self, use_state, use_tactile, dt=5e-5, total_steps=300, sub_steps=50,obj=None):
+    def __init__(self, use_state, use_tactile, dt=5e-5, total_steps=100, sub_steps=50,obj=None):
         self.iter = 0
         
         self.dt = dt
         self.total_steps = total_steps
-        self.prepare_step = 300
+        self.prepare_step = 50
         self.sub_steps = sub_steps
         self.dim = 3
         self.fem_sensor1 = FEMDomeSensor(dt, sub_steps)
@@ -183,7 +183,7 @@ class Contact:
         # initial position for sensor 1 & 2
 
         #Pressing 
-        vx1 = 0.0; vy1 = 1.5; vz1 = 0.0
+        vx1 = 0.0; vy1 = 1.5 * 6; vz1 = 0.0
 
         rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
 
@@ -192,7 +192,7 @@ class Contact:
             self.p_sensor1[i] = ti.Vector([vx1, vy1, vz1])
             self.o_sensor1[i] = ti.Vector([rx1, ry1, rz1])
 
-        vx1 = 1.0; vy1 = 0.5; vz1 = 0.0
+        vx1 = 1.0 * 6; vy1 = 0.5 * 6; vz1 = 0.0
 
         rx1 = 0.0; ry1 = 0.0; rz1 = 0.0
 
@@ -591,7 +591,7 @@ def main():
 
     obj_name = "block-10.stl"
     num_sub_steps = 50
-    num_total_steps = 600
+    num_total_steps = 100
     num_opt_steps = 100
     dt = 5e-5
     contact_model = Contact(use_tactile=USE_TACTILE, use_state=USE_STATE, dt=dt, total_steps = num_total_steps, sub_steps = num_sub_steps,  obj=obj_name)
@@ -643,16 +643,13 @@ def main():
                 if USE_STATE:
                     contact_model.compute_angle(ts)
                     # print("angle",  contact_model.angle[ts])
-            
-            contact_model.fem_sensor1.extract_markers(0)
-            contact_model.compute_marker_loss_1(ts)
-            contact_model.compute_marker_loss_2(ts)
 
             ## visualizationw
             viz_scale = 0.1
             viz_offset = [0.0, 0.0]
             
             if not off_screen:
+                contact_model.fem_sensor1.extract_markers(0)
                 init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
                 marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
                 contact_model.draw_markers(init_2d, marker_2d, gui2)
@@ -673,7 +670,7 @@ def main():
             #     print(contact_model.fem_sensor1.mu.grad[None])
             #     print()
 
-            if ts == 100:
+            if ts == 50:
                 print(f'forward {ts}')
                 print(contact_model.loss.grad[None])
                 print(contact_model.squared_error_sum.grad[ts])
@@ -711,7 +708,8 @@ def main():
             contact_model.compute_marker_loss_2.grad(ts)
             contact_model.compute_marker_loss_1.grad(ts)
             contact_model.fem_sensor1.extract_markers.grad(0)
-            if ts == 550 or ts == 500:
+
+            if ts == 50 or ts == 25:
                 print(f'backward-1 {ts}')
                 print(contact_model.loss.grad[None])
                 print(contact_model.squared_error_sum.grad[ts])
@@ -768,18 +766,21 @@ def main():
                 contact_model.reset()
                 for ss in range(num_sub_steps - 1):
                     contact_model.update(ss)
-
-            # contact_model.fem_sensor1.extract_markers(0)
-            # init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
-            # marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
-            # contact_model.draw_markers(init_2d, marker_2d, gui2)
             
-            # contact_model.draw_perspective(0)
-            # gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
-            # gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)           
+            contact_model.fem_sensor1.extract_markers(0)
+            contact_model.compute_marker_loss_1(ts)
+            contact_model.compute_marker_loss_2(ts)
 
-            # gui1.show()
-            # gui2.show()
+            init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
+            marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
+            contact_model.draw_markers(init_2d, marker_2d, gui2)
+            
+            contact_model.draw_perspective(0)
+            gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
+            gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)           
+
+            gui1.show()
+            gui2.show()
             # gui3.show()
 
             # if ts == 550 or ts == 500:
