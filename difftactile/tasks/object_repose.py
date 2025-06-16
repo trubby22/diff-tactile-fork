@@ -643,6 +643,9 @@ def main():
                 if USE_STATE:
                     contact_model.compute_angle(ts)
                     # print("angle",  contact_model.angle[ts])
+            
+            contact_model.compute_marker_loss_1(ts)
+            contact_model.compute_marker_loss_2(ts)
 
             ## visualizationw
             viz_scale = 0.1
@@ -676,6 +679,14 @@ def main():
                 print(contact_model.squared_error_sum.grad[ts])
                 print(contact_model.target_marker_positions.grad[ts, 0])
                 print(contact_model.fem_sensor1.predict_markers.grad[0])
+                print(contact_model.fem_sensor1.pos.grad[0, 0])
+                print(contact_model.fem_sensor1.vel.grad[0, 0])
+                print(contact_model.fem_sensor1.mu.grad[None])
+                print(contact_model.fem_sensor1.lam.grad[None])
+                print(contact_model.kn.grad[None])
+                print(contact_model.kd.grad[None])
+                print(contact_model.kt.grad[None])
+                print(contact_model.friction_coeff.grad[None])
                 print()
         ## backward!    
         loss_frame = 0
@@ -707,7 +718,7 @@ def main():
             
             contact_model.compute_marker_loss_2.grad(ts)
             contact_model.compute_marker_loss_1.grad(ts)
-            contact_model.fem_sensor1.extract_markers.grad(0)
+            # contact_model.fem_sensor1.extract_markers.grad(0)
 
             if ts == 50 or ts == 25:
                 print(f'backward-1 {ts}')
@@ -715,6 +726,14 @@ def main():
                 print(contact_model.squared_error_sum.grad[ts])
                 print(contact_model.target_marker_positions.grad[ts, 0])
                 print(contact_model.fem_sensor1.predict_markers.grad[0])
+                print(contact_model.fem_sensor1.pos.grad[0, 0])
+                print(contact_model.fem_sensor1.vel.grad[0, 0])
+                print(contact_model.fem_sensor1.mu.grad[None])
+                print(contact_model.fem_sensor1.lam.grad[None])
+                print(contact_model.kn.grad[None])
+                print(contact_model.kd.grad[None])
+                print(contact_model.kt.grad[None])
+                print(contact_model.friction_coeff.grad[None])
                 print()
 
             
@@ -734,14 +753,20 @@ def main():
             grad_p1 = contact_model.p_sensor1.grad[ts]
             grad_o1 = contact_model.o_sensor1.grad[ts]
 
-            if ts == 550 or ts == 500:
+            if ts == 50 or ts == 25:
                 print(f'backward-2 {ts}')
-                print(contact_model.fem_sensor1.lam.grad[None])
+                print(contact_model.loss.grad[None])
+                print(contact_model.squared_error_sum.grad[ts])
+                print(contact_model.target_marker_positions.grad[ts, 0])
+                print(contact_model.fem_sensor1.predict_markers.grad[0])
+                print(contact_model.fem_sensor1.pos.grad[0, 0])
+                print(contact_model.fem_sensor1.vel.grad[0, 0])
                 print(contact_model.fem_sensor1.mu.grad[None])
-                print(contact_model.friction_coeff.grad[None])
+                print(contact_model.fem_sensor1.lam.grad[None])
                 print(contact_model.kn.grad[None])
                 print(contact_model.kd.grad[None])
                 print(contact_model.kt.grad[None])
+                print(contact_model.friction_coeff.grad[None])
                 print()
      
 
@@ -768,8 +793,6 @@ def main():
                     contact_model.update(ss)
             
             contact_model.fem_sensor1.extract_markers(0)
-            contact_model.compute_marker_loss_1(ts)
-            contact_model.compute_marker_loss_2(ts)
 
             init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
             marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
