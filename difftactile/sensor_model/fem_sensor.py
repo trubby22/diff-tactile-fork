@@ -49,7 +49,7 @@ class FEMDomeSensor:
         self.lam[None] = self.E_init[None] * self.nu_init[None] / (1 + self.nu_init[None]) / (1 - 2 * self.nu_init[None])  # Lame parameters
         self.damping = 10.0
 
-        self.init_x = ti.Vector.field(3, float, self.n_verts)
+        self.init_x = ti.Vector.field(3, float, self.n_verts, needs_grad=True)
         self.init_x.from_numpy(self.all_nodes.astype(np.float32))
         self.layer_id = ti.field(int, self.n_verts) # indicate layers
         self.layer_id.from_numpy(self.layer_idxs.astype(np.int32))
@@ -59,7 +59,7 @@ class FEMDomeSensor:
         self.surface_id.from_numpy(self.surface_id_np.astype(np.int32))
         self.num_surface = len(self.surface_id_np)
         self.surface_cam_loc = ti.Vector.field(2, float, self.num_surface, needs_grad = True)
-        self.surface_cam_virtual_loc = ti.Vector.field(2, float, self.num_surface)
+        self.surface_cam_virtual_loc = ti.Vector.field(2, float, self.num_surface, needs_grad=True)
 
         # cam model
         self.num_k_closest = 5
@@ -67,9 +67,9 @@ class FEMDomeSensor:
         self.num_markers = len(self.initial_markers)
 
         self.predict_markers = ti.Vector.field(2, float, self.num_markers, needs_grad = True)
-        self.virtual_markers = ti.Vector.field(2, float, self.num_markers)
+        self.virtual_markers = ti.Vector.field(2, float, self.num_markers, needs_grad=True)
 
-        self.interp_weight = ti.Vector.field(self.num_k_closest, float, self.num_markers)
+        self.interp_weight = ti.Vector.field(self.num_k_closest, float, self.num_markers, needs_grad=True)
         self.interp_weight.from_numpy(interp_weight.astype(np.float32))
         self.interp_idx = ti.Vector.field(self.num_k_closest, int, self.num_markers)
         self.interp_idx.from_numpy(interp_idx.astype(np.int32))
@@ -83,14 +83,14 @@ class FEMDomeSensor:
         self.pos = ti.Vector.field(3, float, shape=(self.sub_steps, self.n_verts), needs_grad = True)
         self.vel = ti.Vector.field(3, float, shape=(self.sub_steps, self.n_verts), needs_grad = True)
 
-        self.B = ti.Matrix.field(3, 3, float, self.n_cells)
-        self.phi = ti.field(float, self.n_cells)  # potential energy of each face (Neo-Hookean)
+        self.B = ti.Matrix.field(3, 3, float, self.n_cells, needs_grad=True)
+        self.phi = ti.field(float, self.n_cells, needs_grad=True)  # potential energy of each face (Neo-Hookean)
 
         self.external_force_field = ti.Vector.field(3, dtype=ti.f32, shape=(self.sub_steps, self.n_verts), needs_grad = True) # contact force between FEM node to the closest particle
         self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad = True) # surface aggreated 3-axis forces
 
         # contact model parameters (default)
-        self.out_direction = ti.Vector.field(3, float, ())
+        self.out_direction = ti.Vector.field(3, float, (), needs_grad=True)
 
         ## control parameters
         self.d_pos = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
