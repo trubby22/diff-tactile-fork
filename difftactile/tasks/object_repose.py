@@ -743,7 +743,7 @@ def main():
 
         ## save loss plot
         if opts % 5 == 0 or opts == num_opt_steps-1:
-            print("# Iter ", opts, "Opt step loss: ", loss_frame)
+            # print("# Iter ", opts, "Opt step loss: ", loss_frame)
             plt.title("Trajectory Optimization")
             plt.ylabel("Loss")
             plt.xlabel("Iter") # "Gradient Descent Iterations"
@@ -759,7 +759,7 @@ def main():
             best_o = contact_model.o_sensor1.to_numpy()
             np.save(os.path.join(f"lr_object_repose_state_{args.use_state}_tactile_{args.use_tactile}_{args.times}","control_pos_best.npy"), best_p)
             np.save(os.path.join(f"lr_object_repose_state_{args.use_state}_tactile_{args.use_tactile}_{args.times}","control_ori_best.npy"), best_o)
-            print("Best traj saved!")
+            # print("Best traj saved!")
 
 
 
