@@ -769,17 +769,17 @@ def main():
                 for ss in range(num_sub_steps - 1):
                     contact_model.update(ss)
 
-            contact_model.fem_sensor1.extract_markers(0)
-            init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
-            marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
-            contact_model.draw_markers(init_2d, marker_2d, gui2)
+            # contact_model.fem_sensor1.extract_markers(0)
+            # init_2d = contact_model.fem_sensor1.virtual_markers.to_numpy()
+            # marker_2d = contact_model.fem_sensor1.predict_markers.to_numpy()
+            # contact_model.draw_markers(init_2d, marker_2d, gui2)
             
-            contact_model.draw_perspective(0)
-            gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
-            gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)           
+            # contact_model.draw_perspective(0)
+            # gui1.circles(viz_scale * contact_model.draw_pos3.to_numpy() + viz_offset, radius=2, color=0x039dfc)
+            # gui1.circles(viz_scale * contact_model.draw_pos2.to_numpy() + viz_offset, radius=2, color=0xe6c949)           
 
-            gui1.show()
-            gui2.show()
+            # gui1.show()
+            # gui2.show()
             # gui3.show()
 
             # if ts == 550 or ts == 500:
