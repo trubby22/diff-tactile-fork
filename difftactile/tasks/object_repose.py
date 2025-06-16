@@ -124,7 +124,17 @@ class Contact:
 
         self.angle_x = ti.field(float, ())
         self.angle_y = ti.field(float, ())
-        self.angle_z = ti.field(float, ())     
+        self.angle_z = ti.field(float, ())   
+
+        self.target_marker_positions = ti.Vector.field(
+            2, dtype=ti.f32, shape=(self.total_steps, self.fem_sensor1.num_markers), needs_grad=True
+        )
+        target_marker_positions_npy = np.ones(shape=(self.total_steps, self.fem_sensor1.num_markers, 2), dtype=float)
+        self.target_marker_positions.from_numpy(target_marker_positions_npy)
+
+        self.squared_error_sum = ti.field(dtype=float, shape=(self.total_steps,), needs_grad=True)
+        squared_error_sum_npy = np.zeros(dtype=float, shape=(self.total_steps,))
+        self.squared_error_sum.from_numpy(squared_error_sum_npy)
             
 
     def init(self):
@@ -306,7 +316,22 @@ class Contact:
         self.predict_force1[t] = self.fem_sensor1.inv_rot[None] @ self.contact_force1[None]
         
         self.loss[None] += self.beta[None] *((self.predict_force1[t][1] - self.target_force1[t][1])**2 + (self.predict_force1[t][0] - self.target_force1[t][0])**2)
+    
+    @ti.kernel
+    def compute_marker_loss_1(self, f: ti.i32):
+        for i in range(self.fem_sensor1.num_markers):
+            sim_marker = self.fem_sensor1.predict_markers[i]
+            exp_marker = self.target_marker_positions[f, i]
 
+            dx = exp_marker[0] - sim_marker[0]
+            dy = exp_marker[1] - sim_marker[1]
+            squared_error = dx * dx + dy * dy
+            self.squared_error_sum[f] += squared_error
+
+    @ti.kernel
+    def compute_marker_loss_2(self, f: ti.i32):
+        rmse = ti.sqrt(self.squared_error_sum[f] / self.fem_sensor1.num_markers)
+        self.loss[None] += rmse
 
     def load_target(self):
         
@@ -607,16 +632,21 @@ def main():
             # ########
             # print("# FP Iter ", ts)
 
-            if USE_TACTILE:
-                contact_model.compute_contact_force(num_sub_steps - 2)
-                form_loss = contact_model.loss[None]
-                contact_model.compute_force_loss(ts)
-                # print("contact force: ", contact_model.predict_force1[ts])
-                # print("force loss", contact_model.loss[None]-form_loss)
+            if False:
+                if USE_TACTILE:
+                    contact_model.compute_contact_force(num_sub_steps - 2)
+                    form_loss = contact_model.loss[None]
+                    contact_model.compute_force_loss(ts)
+                    # print("contact force: ", contact_model.predict_force1[ts])
+                    # print("force loss", contact_model.loss[None]-form_loss)
 
-            if USE_STATE:
-                contact_model.compute_angle(ts)
-                # print("angle",  contact_model.angle[ts])
+                if USE_STATE:
+                    contact_model.compute_angle(ts)
+                    # print("angle",  contact_model.angle[ts])
+            
+            contact_model.compute_contact_force(num_sub_steps - 2)
+            contact_model.compute_marker_loss_1(ts)
+            contact_model.compute_marker_loss_2(ts)
 
             ## visualizationw
             viz_scale = 0.1
@@ -652,23 +682,28 @@ def main():
             # print("BP", ts)
             contact_model.clear_all_grad()
      
-            if USE_TACTILE:
-                contact_model.compute_contact_force(num_sub_steps - 2)
-                form_loss = contact_model.loss[None]
-                contact_model.compute_force_loss(ts)
-                # print("force loss", contact_model.loss[None]-form_loss)
+            if False:
+                if USE_TACTILE:
+                    contact_model.compute_contact_force(num_sub_steps - 2)
+                    form_loss = contact_model.loss[None]
+                    contact_model.compute_force_loss(ts)
+                    # print("force loss", contact_model.loss[None]-form_loss)
 
-            if USE_STATE:
-                form_loss = contact_model.loss[None]
-                contact_model.compute_angle_loss(ts+1)
-                # print("angle loss", contact_model.loss[None]-form_loss)
-                contact_model.compute_angle_loss.grad(ts+1)
+                if USE_STATE:
+                    form_loss = contact_model.loss[None]
+                    contact_model.compute_angle_loss(ts+1)
+                    # print("angle loss", contact_model.loss[None]-form_loss)
+                    contact_model.compute_angle_loss.grad(ts+1)
+                    
+                    contact_model.compute_angle.grad(ts)
                 
-                contact_model.compute_angle.grad(ts)
-               
-            if USE_TACTILE:
-                contact_model.compute_force_loss.grad(ts)
-                contact_model.compute_contact_force.grad(num_sub_steps - 2)
+                if USE_TACTILE:
+                    contact_model.compute_force_loss.grad(ts)
+                    contact_model.compute_contact_force.grad(num_sub_steps - 2)
+            
+            contact_model.compute_marker_loss_2.grad(ts)
+            contact_model.compute_marker_loss_1.grad(ts)
+            contact_model.compute_contact_force.grad(num_sub_steps - 2)
             
             for ss in range(num_sub_steps-2, -1, -1):
                 contact_model.update_grad(ss)
