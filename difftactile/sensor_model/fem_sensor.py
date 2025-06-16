@@ -23,8 +23,8 @@ class FEMDomeSensor:
         self.dt = dt
         self.N_node = 200 # number of nodes in the most inner layer
         self.N_t = 4 # thickness
-        self.t_res = 0.2 # [cm]; inter-layer distance
-        self.inner_radius = 2.7 # [cm]
+        self.t_res = 0.25 # [cm]; inter-layer distance
+        self.inner_radius = 0.75 # [cm]
 
         self.all_nodes, self.all_f2v, self.surface_f2v, self.layer_idxs = self.init_mesh()
         self.n_verts = len(self.all_nodes)
@@ -34,7 +34,7 @@ class FEMDomeSensor:
         self.dim = 3
         self.dx = 2 * np.pi * self.inner_radius**2 / self.N_node
         self.vol = self.dx * self.t_res
-        print(f'self.dx: {self.dx}; self.vol: {self.vol}')
+        # print(f'self.dx: {self.dx}; self.vol: {self.vol}')
         self.rho = 1.145 * 1_000 # density [kg / m^3]
         self.mass = self.vol * self.rho
         self.eps = 1e-10
@@ -127,12 +127,12 @@ class FEMDomeSensor:
         self.trans_h[None] = self.trans_world[None] @ self.trans_local[None]
         self.inv_trans_h[None] = self.trans_local[None].inverse() @ self.trans_world[None].inverse()
         self.init_pos()
-        with open(f"output/tactile_sensor.pos.pkl", 'wb') as f:
-            pickle.dump(self.pos.to_numpy()[0], f)
-        np.savetxt(f'output/tactile_sensor.pos.csv', self.pos.to_numpy()[0], delimiter=",", fmt='%.2f')
-        with open(f"./output/tactile_sensor.init_x.pkl", 'wb') as f:
-            pickle.dump(self.init_x.to_numpy(), f)
-        np.savetxt(f'output/tactile_sensor.init_x.csv', self.init_x.to_numpy()[0], delimiter=",", fmt='%.2f')
+        # with open(f"output/tactile_sensor.pos.pkl", 'wb') as f:
+        #     pickle.dump(self.pos.to_numpy()[0], f)
+        # np.savetxt(f'output/tactile_sensor.pos.csv', self.pos.to_numpy()[0], delimiter=",", fmt='%.2f')
+        # with open(f"./output/tactile_sensor.init_x.pkl", 'wb') as f:
+        #     pickle.dump(self.init_x.to_numpy(), f)
+        # np.savetxt(f'output/tactile_sensor.init_x.csv', self.init_x.to_numpy()[0], delimiter=",", fmt='%.2f')
 
     def init_cam_model(self, init_img_path=None):
         if init_img_path is None:
@@ -309,11 +309,11 @@ class FEMDomeSensor:
             rad = self.inner_radius + i * self.t_res
             ratio = (rad**2) / (self.inner_radius**2)
             n_node = int(self.N_node * ratio)
-            print(f'i: {i}; rad: {rad}; ratio: {ratio}; n_node: {n_node}')
+            # print(f'i: {i}; rad: {rad}; ratio: {ratio}; n_node: {n_node}')
             layer_nodes = self.fibonacci_sphere(samples=n_node, scale = rad)
-            with open(f"output/tactile_sensor.layer_nodes_{i}.pkl", 'wb') as f:
-                pickle.dump(np.array(layer_nodes), f)
-            np.savetxt(f'output/tactile_sensor.layer_nodes_{i}.csv', np.array(layer_nodes), delimiter=",", fmt='%.2f')
+            # with open(f"output/tactile_sensor.layer_nodes_{i}.pkl", 'wb') as f:
+            #     pickle.dump(np.array(layer_nodes), f)
+            # np.savetxt(f'output/tactile_sensor.layer_nodes_{i}.csv', np.array(layer_nodes), delimiter=",", fmt='%.2f')
             all_nodes.append(layer_nodes)
             layer_height.append([rad] * n_node)
             layer_idxs.append([i] * n_node)
@@ -336,10 +336,10 @@ class FEMDomeSensor:
             ('all_f2v', all_f2v),
             ('layer_idxs', layer_idxs),
         ]
-        for x, y in pickles:
-            with open(f"output/tactile_sensor.{x}.pkl", 'wb') as f:
-                pickle.dump(y, f)
-            np.savetxt(f'output/tactile_sensor.{x}.csv', y, delimiter=",", fmt='%.2f')
+        # for x, y in pickles:
+        #     with open(f"output/tactile_sensor.{x}.pkl", 'wb') as f:
+        #         pickle.dump(y, f)
+        #     np.savetxt(f'output/tactile_sensor.{x}.csv', y, delimiter=",", fmt='%.2f')
         return all_nodes, all_f2v, surface_f2v, layer_idxs
 
     @ti.kernel
@@ -566,7 +566,6 @@ class FEMDomeSensor:
         self.inv_trans_h.grad[None].fill(0.0)
         self.dtrans_h.grad[None].fill(0.0)
         self.control_vel.grad.fill(0.0)
-
 
     @ti.kernel
     def clear_step_grad(self, f:ti.i32):

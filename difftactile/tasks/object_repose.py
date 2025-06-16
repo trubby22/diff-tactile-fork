@@ -585,11 +585,12 @@ def main():
     form_loss = 0
 
     for opts in range(0, num_opt_steps):
-        print("Opt # step ======================", opts)
+        # print("Opt # step ======================", opts)
         contact_model.init()
         contact_model.clear_all_grad()
         contact_model.clear_state_loss_grad()
         
+        print('forward')
         for ts in range(num_total_steps-1):
             contact_model.iter = ts
             contact_model.set_pos_control(ts)
@@ -604,18 +605,18 @@ def main():
                 
 
             # ########
-            print("# FP Iter ", ts)
+            # print("# FP Iter ", ts)
 
             if USE_TACTILE:
                 contact_model.compute_contact_force(num_sub_steps - 2)
                 form_loss = contact_model.loss[None]
                 contact_model.compute_force_loss(ts)
-                print("contact force: ", contact_model.predict_force1[ts])
-                print("force loss", contact_model.loss[None]-form_loss)
+                # print("contact force: ", contact_model.predict_force1[ts])
+                # print("force loss", contact_model.loss[None]-form_loss)
 
             if USE_STATE:
                 contact_model.compute_angle(ts)
-                print("angle",  contact_model.angle[ts])
+                # print("angle",  contact_model.angle[ts])
 
             ## visualizationw
             viz_scale = 0.1
@@ -632,24 +633,35 @@ def main():
                 gui1.show()
                 gui2.show()
                 # gui3.show()
+            
+            if ts == 100:
+                print(f'forward {ts}')
+                print(contact_model.friction_coeff.grad[None])
+                print(contact_model.kn.grad[None])
+                print(contact_model.kd.grad[None])
+                print(contact_model.kt.grad[None])
+                print(contact_model.fem_sensor1.lam.grad[None])
+                print(contact_model.fem_sensor1.mu.grad[None])
+                print()
         ## backward!    
         loss_frame = 0
         form_loss = 0
 
+        print('backward')
         for ts in range(num_total_steps-2, -1, -1):
-            print("BP", ts)
+            # print("BP", ts)
             contact_model.clear_all_grad()
      
             if USE_TACTILE:
                 contact_model.compute_contact_force(num_sub_steps - 2)
                 form_loss = contact_model.loss[None]
                 contact_model.compute_force_loss(ts)
-                print("force loss", contact_model.loss[None]-form_loss)
+                # print("force loss", contact_model.loss[None]-form_loss)
 
             if USE_STATE:
                 form_loss = contact_model.loss[None]
                 contact_model.compute_angle_loss(ts+1)
-                print("angle loss", contact_model.loss[None]-form_loss)
+                # print("angle loss", contact_model.loss[None]-form_loss)
                 contact_model.compute_angle_loss.grad(ts+1)
                 
                 contact_model.compute_angle.grad(ts)
@@ -682,9 +694,9 @@ def main():
      
 
             loss_frame += contact_model.loss[None]
-            print("# BP Iter: ", ts, " loss: ", contact_model.loss[None])
-            print("P/O grads: ", grad_p1, grad_o1)
-            print("P/O updated: ", contact_model.p_sensor1[ts], contact_model.o_sensor1[ts])
+            # print("# BP Iter: ", ts, " loss: ", contact_model.loss[None])
+            # print("P/O grads: ", grad_p1, grad_o1)
+            # print("P/O updated: ", contact_model.p_sensor1[ts], contact_model.o_sensor1[ts])
 
             ### rerun the forward one more time to fill the grad
             if (ts - 1) >=0:
@@ -709,6 +721,16 @@ def main():
             gui1.show()
             gui2.show()
             # gui3.show()
+
+            if ts == 550 or ts == 500:
+                print(f'backward {ts}')
+                print(contact_model.friction_coeff.grad[None])
+                print(contact_model.kn.grad[None])
+                print(contact_model.kd.grad[None])
+                print(contact_model.kt.grad[None])
+                print(contact_model.fem_sensor1.lam.grad[None])
+                print(contact_model.fem_sensor1.mu.grad[None])
+
         losses.append(loss_frame)
 
 
@@ -754,4 +776,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     USE_STATE = args.use_state
     USE_TACTILE = args.use_tactile
+    USE_STATE = True
+    USE_TACTILE = True
     main()

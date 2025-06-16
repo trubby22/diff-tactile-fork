@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "psb120 debug",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/difftactile/tasks/object_repose.py",
+            "console": "integratedTerminal",
+            "args": "--use_tactile --use_state",
+            "cwd": "${workspaceFolder}/difftactile/tasks"
+        }
+    ]
+}
