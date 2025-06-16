@@ -643,8 +643,6 @@ def main():
             
             contact_model.compute_marker_loss_2.grad(ts)
             contact_model.compute_marker_loss_1.grad(ts)
-            contact_model.fem_sensor1.extract_markers.grad(0)
-
             if ts == 50 or ts == 25:
                 print(f'backward-1 {ts}')
                 print(contact_model.loss.grad[None])
@@ -660,21 +658,7 @@ def main():
                 print(contact_model.kt.grad[None])
                 print(contact_model.friction_coeff.grad[None])
                 print()
-
-            
-            for ss in range(num_sub_steps-2, -1, -1):
-                contact_model.update_grad(ss)
-
-            contact_model.fem_sensor1.set_vel.grad(0)
-            contact_model.fem_sensor1.set_control_vel.grad(0)
-            contact_model.fem_sensor1.set_pose_control.grad()
-
-            contact_model.set_pos_control.grad(ts)
-            
-            ### optimization with grad backpropagation        
-            grad_p1 = contact_model.p_sensor1.grad[ts]
-            grad_o1 = contact_model.o_sensor1.grad[ts]
-
+            contact_model.fem_sensor1.extract_markers.grad(0)
             if ts == 50 or ts == 25:
                 print(f'backward-2 {ts}')
                 print(contact_model.loss.grad[None])
@@ -690,6 +674,22 @@ def main():
                 print(contact_model.kt.grad[None])
                 print(contact_model.friction_coeff.grad[None])
                 print()
+
+
+            
+            for ss in range(num_sub_steps-2, -1, -1):
+                contact_model.update_grad(ss)
+
+            contact_model.fem_sensor1.set_vel.grad(0)
+            contact_model.fem_sensor1.set_control_vel.grad(0)
+            contact_model.fem_sensor1.set_pose_control.grad()
+
+            contact_model.set_pos_control.grad(ts)
+            
+            ### optimization with grad backpropagation        
+            grad_p1 = contact_model.p_sensor1.grad[ts]
+            grad_o1 = contact_model.o_sensor1.grad[ts]
+
      
 
             lr_p = 0.5e1
