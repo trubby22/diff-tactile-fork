@@ -412,7 +412,6 @@ def main():
         num_sub_frames=num_sub_frames,
         obj=phantom_name,
     )
-    contact_model.draw_table()
     contact_model.set_up_trajectory()
     np.savetxt(f'output/trajectory.p_sensor1.csv', contact_model.p_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
     np.savetxt(f'output/trajectory.o_sensor1.csv', contact_model.o_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
