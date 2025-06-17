@@ -4,7 +4,7 @@ from difftactile.tasks.tumour_phantom_visualisation import (
     update_gui,
 )
 from difftactile.sensor_model.fem_sensor import FEMDomeSensor
-from difftactile.object_model.mpm_elastic import MPMObj
+from difftactile.object_model.multi_obj import MultiObj
 
 import taichi as ti
 import numpy as np
@@ -33,7 +33,7 @@ class Contact(ContactVisualisation):
         self.num_frames = num_frames
         self.num_sub_frames = num_sub_frames
         self.fem_sensor1 = FEMDomeSensor(dt, num_sub_frames)
-        self.mpm_object = MPMObj(
+        self.mpm_object = MultiObj(
             dt=dt,
             sub_steps=num_sub_frames,
             obj_name=obj,
@@ -109,12 +109,12 @@ class Contact(ContactVisualisation):
 
     def set_up_initial_positions(self):
         phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
-        tactile_sensor_pose = [12.5, 11.5, 6.30625, -90, 0, 0]
+        tactile_sensor_pose = [12.5, 11.5, 6.30625+50, -90, 0, 0]
         
         self.mpm_object.init(
-            position=phantom_pose[:3],
-            orientation=phantom_pose[3:],
-            velocity=[0.0, 0.0, 0.0],
+            pos=phantom_pose[:3],
+            ori=phantom_pose[3:],
+            vel=[0.0, 0.0, 0.0],
         )
         t_dx, t_dy, t_dz, rot_x, rot_y, rot_z = tactile_sensor_pose
         self.fem_sensor1.init(rot_x, rot_y, rot_z, t_dx, t_dy, t_dz)
@@ -145,11 +145,6 @@ class Contact(ContactVisualisation):
         for i in range(self.num_frames):
             self.p_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
             self.o_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
-
-        for i in range(self.velocities.shape[0]):
-            for j in range(self.motion_start_end_ixs[i], self.motion_start_end_ixs[i+1]):
-                self.p_sensor1[j] = ti.Vector([self.velocities[i][0], self.velocities[i][1], self.velocities[i][2]], dt=ti.f32)
-                self.o_sensor1[j] = ti.Vector([self.velocities[i][3], self.velocities[i][4], self.velocities[i][5]], dt=ti.f32)
 
     @ti.kernel
     def set_pos_control(self, f: ti.i32):
@@ -375,15 +370,15 @@ class Contact(ContactVisualisation):
 
 def main():
     if RUN_ON_LAB_MACHINE:
-        ti.init(debug=False, offline_cache=False, arch=ti.cuda, device_memory_GB=9)
+        ti.init(debug=False, offline_cache=False, log_level=ti.ERROR, arch=ti.cuda, device_memory_GB=9)
     else:
-        ti.init(debug=False, offline_cache=False, arch=ti.cpu)
+        ti.init(debug=False, offline_cache=False, log_level=ti.ERROR, arch=ti.cpu)
 
     gui_tuple = set_up_gui()
 
     phantom_name = "suturing-phantom.stl"
     num_sub_frames = 50
-    num_frames = 100
+    num_frames = 2_000
     num_opt_steps = 20
     dt = 5e-5
     contact_model = Contact(

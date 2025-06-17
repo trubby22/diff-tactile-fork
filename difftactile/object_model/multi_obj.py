@@ -3,13 +3,9 @@ a class to describe multi-material objects with mpm
 """
 import os
 import taichi as ti
-import trimesh
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import sys
-import math
 from difftactile.object_model.obj_loader import ObjLoader
-from math import pi
 import torch
 
 TI_TYPE = ti.f32
@@ -36,8 +32,6 @@ class MultiObj:
         self.particle_density = self.n_grid * density * obj_scale / space_scale
         self.gravity = ti.Vector([0.0, 0.0, 0.0])
 
-        self.border_line = np.array([-0.42, 0.42]) * self.obj_scale
-
         ## parameters for object
         self.obj_name = obj_name
         if self.obj_name is not None:
@@ -47,13 +41,10 @@ class MultiObj:
             self.n_particles = len(obj_loader.particles)
             self.particles = ti.Vector.field(3, dtype=float, shape=self.n_particles)
             self.particles.from_numpy((obj_loader.particles * self.obj_scale).astype(np.float32))
-            self.titles = ti.Vector.field(1, dtype=int, shape=self.n_particles)
+            self.titles = ti.field(dtype=int, shape=self.n_particles)
             print("Object model is loaded!")
         else:
             print("ERR on loading object model")
-
-        height_limit = np.max(obj_loader.particles[:, 1])
-        self.border_line = np.array([2 * height_limit * (30 / 43) - height_limit, 2 * height_limit * (33 / 43) - height_limit]) * self.obj_scale
 
         self.dx_0 = float(self.space_scale / self.n_grid)
         self.inv_dx_0 =  1 / self.dx_0
@@ -62,17 +53,19 @@ class MultiObj:
         self.eps = 1e-5
         self.damping = 35.0
 
-        self.E_0 = ti.field(dtype=ti.f32, shape=(3,), needs_grad=True)
-        self.nu_0 = ti.field(dtype=ti.f32, shape=(3,), needs_grad=True)
-        self.lamda_0 = ti.field(dtype=ti.f32, shape=(3,), needs_grad=True)
-        self.mu_0 = ti.field(dtype=ti.f32, shape=(3,), needs_grad=True)
-        self.E_0[2], self.nu_0[2] = 4e3 * self.space_scale, 0.4
-        self.E_0[1], self.nu_0[1] = 4e1 * self.space_scale, 0.4
-        self.E_0[0], self.nu_0[0] = 4e5 * self.space_scale, 0.4 # 0 for lower, 1 for middle, 2 for upper
-        for item in range(3):
+        self.E_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
+        self.nu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
+        self.lamda_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
+        self.mu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
+
+        # Material A (normal tissue/fat)
+        self.E_0[0], self.nu_0[0] = 5e3 * self.space_scale, 0.48  # Young's modulus ~5 kPa, nearly incompressible
+        # Material B (tumor)
+        self.E_0[1], self.nu_0[1] = 50e3 * self.space_scale, 0.48  # Young's modulus ~50 kPa, nearly incompressible
+
+        for item in range(2):
             self.mu_0[item] = self.E_0[item] / 2 / (1 + self.nu_0[item])
             self.lamda_0[item] = self.E_0[item] * self.nu_0[item] / (1 + self.nu_0[item]) / (1 - 2 * self.nu_0[item])
-
 
         self.x_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # position
         self.v_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # velocity
@@ -90,31 +83,43 @@ class MultiObj:
         self.grid_f = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node external force
         self.grid_occupy = ti.field(dtype=int, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid))
         self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad = True)
-
-
-        self.COM_t0 = ti.Vector.field(3, dtype=float, shape = (self.sub_steps), needs_grad = True)
-        self.COM_t1 = ti.Vector.field(3, dtype=float, shape = (self.sub_steps), needs_grad = True)
-        self.H = ti.Matrix.field(3, 3, dtype=float, shape = (self.sub_steps), needs_grad = True)
-        self.R = ti.Matrix.field(3, 3, dtype=float, shape = (self.sub_steps), needs_grad = True)
-        self.U = ti.Matrix.field(3, 3, dtype=float, shape = (self.sub_steps), needs_grad = True)
-        self.S = ti.Matrix.field(3, 3, dtype=float, shape = (self.sub_steps), needs_grad = True)
-        self.V = ti.Matrix.field(3, 3, dtype=float, shape = (self.sub_steps), needs_grad = True)
+        
         self.cache = dict() # for grad backward
+
+        self.group_cardinality = ti.field(dtype=int, shape=(2,), needs_grad=False)
+        self.first_init_done = ti.field(dtype=bool, shape=(), needs_grad=False)
+        
 
     @ti.kernel
     def preprocess_obj(self):
         for item in range(self.n_particles):
-            if self.particles[item][1] < self.border_line[0]:
-                self.titles[item] = 0 # 0 means lower part
-            elif self.particles[item][1] < self.border_line[1]:
-                self.titles[item] = 1 # 1 means middle part
+            pos = self.particles[item]
+            dist_squared = pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]
+            tumour_diameter = 1.0
+            tumour_radius = tumour_diameter / 2.0
+            if dist_squared <= tumour_radius * tumour_radius:
+                self.titles[item] = 1
+                if not self.first_init_done[None]:
+                    self.group_cardinality[1] += 1
             else:
-                self.titles[item] = 2 # 2 means upper part
+                self.titles[item] = 0
+                if not self.first_init_done[None]:
+                    self.group_cardinality[0] += 1
 
     def init(self, pos, ori, vel):
         self.preprocess_obj()
+        if not self.first_init_done[None]:
+            print(f'healthy: {self.group_cardinality[0]}, tumour: {self.group_cardinality[1]}')
+        np.savetxt('output/multi_obj.titles.csv', self.titles.to_numpy(), delimiter=",", fmt='%d')
+        np.savetxt('output/multi_obj.particles.csv', self.particles.to_numpy(), delimiter=",", fmt='%.4f')
+        axiz = 0
+        _min = np.min(self.particles.to_numpy(), axis=axiz)
+        _max = np.max(self.particles.to_numpy(), axis=axiz)
+        if not self.first_init_done[None]:
+            print(f'multi_obj min {_min} max {_max}')
         self.set_object_params(pos, ori, vel)
         self.init_object()
+        self.first_init_done[None] = True
 
     def set_object_params(self, position, orientation, velocity):
         self.init_pos[None] = position
@@ -146,14 +151,6 @@ class MultiObj:
         self.grid_f.fill(0.0)
         self.grid_occupy.fill(0.0)
         self.surf_f.fill(0.0)
-        self.R.fill(0.0)
-        self.U.fill(0.0)
-        self.V.fill(0.0)
-        self.H.fill(0.0)
-        self.S.fill(0.0)
-        self.COM_t0.fill(0.0)
-        self.COM_t1.fill(0.0)
-
 
     @ti.kernel
     def get_external_force(self, f:ti.i32):
@@ -223,7 +220,6 @@ class MultiObj:
         v_term = self.U[f] @ (self.S[f] @ ((ff * (vt @ self.V.grad[f] - self.V.grad[f].transpose() @ self.V[f])) @ vt))
         return u_term + v_term + s_term
 
-
     @ti.kernel
     def p2g(self, f:ti.i32):
         for p in range(self.n_particles):
@@ -250,7 +246,6 @@ class MultiObj:
                 self.grid_m[f, base + offset] += weight * self.p_mass
 
             self.F_0[f+1, p] = self.F_new[f, p]
-
 
     @ti.kernel
     def check_grid_occupy(self, f:ti.i32):
@@ -284,7 +279,6 @@ class MultiObj:
 
                 self.grid_v_out[f, i, j, k] = v_out
 
-
     @ti.kernel
     def g2p(self, f:ti.i32):
         for p in range(self.n_particles): # grid to particle (G2P)
@@ -303,41 +297,6 @@ class MultiObj:
 
             self.v_0[f+1, p], self.C_0[f+1, p] = new_v, new_C
             self.x_0[f+1, p] = self.x_0[f, p] + self.dt * new_v  # advection
-
-
-     #Add rigidy
-    @ti.kernel
-    def compute_COM(self, f:ti.i32):
-        for p in range(self.n_particles):
-            if self.titles[p][0] == 2:
-                self.COM_t0[f] += self.x_0[f, p] / ti.cast(self.n_particles, ti.f32)
-                self.COM_t1[f] += (self.x_0[f, p] + self.dt * self.v_0[f+1, p]) / ti.cast(self.n_particles, ti.f32)
-
-    @ti.kernel
-    def compute_H(self, f: ti.i32):
-        for p in range(self.n_particles):
-            if self.titles[p][0] ==2:
-                self.H[f][0, 0] += (self.x_0[f, p] - self.COM_t0[f])[0] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[0]
-                self.H[f][0, 1] += (self.x_0[f, p] - self.COM_t0[f])[0] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[1]
-                self.H[f][0, 2] += (self.x_0[f, p] - self.COM_t0[f])[0] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[2]
-                self.H[f][1, 0] += (self.x_0[f, p] - self.COM_t0[f])[1] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[0]
-                self.H[f][1, 1] += (self.x_0[f, p] - self.COM_t0[f])[1] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[1]
-                self.H[f][1, 2] += (self.x_0[f, p] - self.COM_t0[f])[1] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[2]
-                self.H[f][2, 0] += (self.x_0[f, p] - self.COM_t0[f])[2] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[0]
-                self.H[f][2, 1] += (self.x_0[f, p] - self.COM_t0[f])[2] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[1]
-                self.H[f][2, 2] += (self.x_0[f, p] - self.COM_t0[f])[2] * (self.x_0[f, p] + self.dt * self.v_0[f+1, p] - self.COM_t1[f])[2]
-
-    @ti.kernel
-    def compute_H_svd(self, f: ti.i32):
-        self.U[f], self.S[f], self.V[f] = ti.svd(self.H[f], ti.f32)
-
-    @ti.kernel
-    def compute_H_svd_grad(self, f: ti.i32):
-        self.H.grad[f] = self.H_svd_grad(f)
-
-    @ti.kernel
-    def compute_R(self, f: ti.i32):
-        self.R[f] = self.V[f] @ self.U[f].transpose()
 
     @ti.kernel
     def copy_frame(self, source: ti.i32, target: ti.i32):
@@ -422,12 +381,3 @@ class MultiObj:
                 self.v_0.grad[t,p].fill(0.0)
                 self.C_0.grad[t,p].fill(0.0)
                 self.F_0.grad[t,p].fill(0.0)
-
-        for t in range(f):
-            self.COM_t0.grad[t].fill(0.0)
-            self.COM_t1.grad[t].fill(0.0)
-            self.H.grad[t].fill(0.0)
-            self.R.grad[t].fill(0.0)
-            self.U.grad[t].fill(0.0)
-            self.S.grad[t].fill(0.0)
-            self.V.grad[t].fill(0.0)

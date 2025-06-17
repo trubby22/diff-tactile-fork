@@ -22,9 +22,6 @@ class ContactVisualisation:
         self.draw_pos2 = ti.Vector.field(2, float, self.fem_sensor1.n_verts)
         self.draw_pos3 = ti.Vector.field(2, float, self.mpm_object.n_particles)
         self.draw_tableline = ti.Vector.field(3, dtype=float, shape=(2 * 4))
-        self.phantom_points = ti.Vector.field(
-            3, dtype=float, shape=(self.mpm_object.n_particles)
-        )
         self.sensor_points = ti.Vector.field(
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
@@ -43,6 +40,48 @@ class ContactVisualisation:
         self.key_points.from_numpy(key_points_npy)
         self.key_point_colours.from_numpy(key_point_colours_npy)
         self.key_point = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
+
+        # self.healthy_tissue_points_idxs = ti.field(
+        #     dtype=int, shape=(self.mpm_object.group_cardinality[0],)
+        # )
+        # self.tumour_points_idxs = ti.field(
+        #     dtype=int, shape=(self.mpm_object.group_cardinality[1],)
+        # )
+        # self.healthy_tissue_points_idxs_counter = ti.field(dtype=int, shape=(), needs_grad=False)
+        # self.tumour_points_idxs_counter = ti.field(dtype=int, shape=(), needs_grad=False)
+        # self.healthy_tissue_points_idxs_counter[None] = 0
+        # self.tumour_points_idxs_counter[None] = 0
+
+        # self.fill_out_per_tissue_points_idxs()
+
+        self.healthy_tissue_points = ti.Vector.field(
+            3, dtype=float, shape=(self.mpm_object.n_particles)
+        )
+        self.tumour_points = ti.Vector.field(
+            3, dtype=float, shape=(self.mpm_object.n_particles)
+        )
+        
+    # @ti.kernel
+    # def fill_out_per_tissue_points_idxs(self):
+    #     for p in range(self.mpm_object.n_particles):
+    #         if self.mpm_object.titles[p] == 0:
+    #             self.healthy_tissue_points_idxs[self.healthy_tissue_points_idxs_counter[None]] = p
+    #             self.healthy_tissue_points_idxs_counter[None] += 1
+    #         elif self.mpm_object.titles[p] == 1:
+    #             self.tumour_points_idxs[self.tumour_points_idxs_counter[None]] = p
+    #             self.tumour_points_idxs_counter[None] += 1
+    
+    @ti.kernel
+    def draw_3d_scene(self, f: ti.i32):
+        for p in range(self.mpm_object.n_particles):
+            if self.mpm_object.titles[p] == 0:
+                self.healthy_tissue_points[p] = self.mpm_object.x_0[f, p]
+            elif self.mpm_object.titles[p] == 1:
+                self.tumour_points[p] = self.mpm_object.x_0[f, p]
+
+        for p in range(self.fem_sensor1.num_surface):
+            idx = self.fem_sensor1.surface_id[p]
+            self.sensor_points[p] = self.fem_sensor1.pos[f, idx]
 
     def draw_markers(self, init_markers, cur_markers, gui):
         img_height = 480
@@ -163,14 +202,6 @@ class ContactVisualisation:
         self.draw_tableline[6] = c4
         self.draw_tableline[7] = c1
 
-    @ti.kernel
-    def draw_3d_scene(self, f: ti.i32):
-        for p in range(self.mpm_object.n_particles):
-            self.phantom_points[p] = self.mpm_object.x_0[f, p]
-        for p in range(self.fem_sensor1.num_surface):
-            idx = self.fem_sensor1.surface_id[p]
-            self.sensor_points[p] = self.fem_sensor1.pos[f, idx]
-
 def set_up_gui():
     if off_screen:
         return None
@@ -188,10 +219,10 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(12.5, 11.5 + 40, 3.00625)
-        camera.up(0, 0, 1)
-        camera.lookat(12.5, 11.5, 3.00625)
-        camera.fov(25)
+        camera.position(12.5, 11.5, 2.05625+40)
+        camera.up(1, 0, 0)
+        camera.lookat(12.5, 11.5, 2.05625)
+        camera.fov(20)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
         else:
@@ -268,29 +299,38 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, xyz):
             gui2.show()
         if enable_gui3:
             gui3.show()
-        camera.track_user_inputs(window, movement_speed=0.2, hold_key=ti.ui.RMB)
+        # camera.track_user_inputs(window, movement_speed=0.2, hold_key=ti.ui.RMB)
         scene.set_camera(camera)
         scene.ambient_light((0.8, 0.8, 0.8))
         scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
         contact_model.draw_3d_scene(0)
+        # if ts == 10:
+        #     np.savetxt('output/contact_model.phantom_points_colours.csv', contact_model.phantom_points_colours.to_numpy(), delimiter=",", fmt='%.1f')
+        #     print('done')
+        
         scene.particles(
-            contact_model.phantom_points,
+            contact_model.healthy_tissue_points,
             color=(0.0, 0.0, 1.0),
-            radius=0.1,
+            radius=0.01,
+        )
+        scene.particles(
+            contact_model.tumour_points,
+            color=(1.0, 1.0, 0.0),
+            radius=0.05,
         )
         scene.particles(
             contact_model.sensor_points,
-            color=(1.0, 1.0, 0.0),
+            color=(0.0, 1.0, 0.0),
             radius=0.1,
         )
         if False:
-            print('contact_model.phantom_points')
-            print(contact_model.phantom_points)
+            print('contact_model.healthy_tissue_points')
+            print(contact_model.healthy_tissue_points)
             print()
             print('contact_model.sensor_points')
             print(contact_model.sensor_points)
             print()
-            phantom_npy = contact_model.phantom_points.to_numpy()
+            phantom_npy = contact_model.healthy_tissue_points.to_numpy()
             sensor_npy = contact_model.sensor_points.to_numpy()
             np.savetxt('output/phantom_coords.csv', phantom_npy, delimiter=",", fmt='%.2f')
             np.savetxt('output/sensor_coords.csv', sensor_npy, delimiter=",", fmt='%.2f')
