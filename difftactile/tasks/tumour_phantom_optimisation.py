@@ -75,8 +75,6 @@ class Contact(ContactVisualisation):
         )
         self.loss = ti.field(float, (), needs_grad=True)
         self.contact_detect_flag = ti.field(float, (), needs_grad=True)
-        self.predict_force1 = ti.Vector.field(self.dim, float, (), needs_grad=True)
-        self.contact_force1 = ti.Vector.field(self.dim, float, (), needs_grad=True)
         self.norm_eps = 1e-11
         self.squared_error_sum = ti.field(dtype=float, shape=(), needs_grad=True)
         self.squared_error_sum[None] = 0
@@ -188,8 +186,6 @@ class Contact(ContactVisualisation):
         self.kt.grad[None] = 0.0
         self.friction_coeff.grad[None] = 0.0
         self.contact_detect_flag.grad[None] = 0.0
-        self.contact_force1.grad[None].fill(0.0)
-        self.predict_force1.grad[None].fill(0.0)
         self.loss[None] = 0.0
         self.loss.grad[None] = 0.0
         self.p_sensor1.grad.fill(0.0)
@@ -211,8 +207,6 @@ class Contact(ContactVisualisation):
         self.mpm_object.reset()
         self.contact_idx.fill(-1)
         self.contact_detect_flag[None] = 0.0
-        self.contact_force1[None].fill(0.0)
-        self.predict_force1[None].fill(0.0)
         self.squared_error_sum[None] = 0.0
 
     @ti.kernel
@@ -229,20 +223,6 @@ class Contact(ContactVisualisation):
             )
             self.fem_sensor1.vel.grad[f, i] = ti.math.clamp(
                 self.fem_sensor1.vel.grad[f, i], -1000.0, 1000.0
-            )
-
-    @ti.kernel
-    def compute_contact_force(self, f: ti.i32):
-        for i in range(self.fem_sensor1.num_triangles):
-            a, b, c = self.fem_sensor1.contact_seg[i]
-            self.contact_force1[None] += (
-                1 / 6 * self.fem_sensor1.external_force_field[f, a]
-            )
-            self.contact_force1[None] += (
-                1 / 6 * self.fem_sensor1.external_force_field[f, b]
-            )
-            self.contact_force1[None] += (
-                1 / 6 * self.fem_sensor1.external_force_field[f, c]
             )
 
     @ti.func
@@ -432,7 +412,6 @@ def main():
             if ts == 0:
                 dome_tip_ix = contact_model.fem_sensor1.get_min_z_ix_from_cache(ts)
             xyz, _ = contact_model.fem_sensor1.get_xyz_angle_from_cache(ts, dome_tip_ix)
-            contact_model.compute_contact_force(num_sub_frames - 2)
             contact_model.interpolate_experimental_video(ts)
             contact_model.compute_marker_loss_1(ts)
             contact_model.compute_marker_loss_2()
@@ -443,7 +422,6 @@ def main():
         for ts in range(num_frames - 2, -1, -1):
             contact_model.compute_marker_loss_2.grad()
             contact_model.compute_marker_loss_1.grad(ts)
-            contact_model.compute_contact_force.grad(num_sub_frames - 2)
             for ss in range(num_sub_frames - 2, -1, -1):
                 contact_model.update_grad(ss)
             contact_model.fem_sensor1.set_vel.grad(0)
