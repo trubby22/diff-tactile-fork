@@ -594,7 +594,7 @@ class FEMDomeSensor:
         z_coords = self.cache[cur_step_name]['pos'][:, 2]
         return float(z_coords.min().item())
 
-    def get_min_z_ix_from_cache(self, t):
+    def get_min_z_ix(self, t):
         """Returns the minimum z-coordinate from the cached positions at timestep t.
         
         Args:
@@ -611,7 +611,7 @@ class FEMDomeSensor:
         z_coords = self.cache[cur_step_name]['pos'][:, 2]
         return z_coords.argmin().item()
 
-    def get_angle_index_from_cache(self, t):
+    def get_high_z_max_y_ix(self, t):
         """Returns the index of the point that has maximum y-coordinate among points
         whose z-coordinate is within 0.2 of the maximum z value.
         
@@ -679,3 +679,64 @@ class FEMDomeSensor:
         
         return (x, y, z), angle_rad
 
+    def get_keypoint_indices(self, t):
+        """Returns indices of 3 key points from the cached positions at timestep t.
+        
+        Args:
+            t (int): The timestep to get the indices from
+            
+        Returns:
+            list: List of 3 indices corresponding to:
+                - Point A: minimum z coordinate
+                - Point B: high z coordinate (within 0.2 of max), max x coordinate
+                - Point C: high z coordinate (within 0.2 of max), max y coordinate
+        """
+        cur_step_name = f'{t:06d}'
+        if cur_step_name not in self.cache:
+            raise KeyError(f"No cached data found for timestep {t}")
+            
+        # Get all positions
+        positions = self.cache[cur_step_name]['pos']
+        
+        # Point A: minimum z coordinate
+        z_coords = positions[:, 2]
+        point_a_idx = int(z_coords.argmin().item())
+        
+        # Points B and C: high z coordinate points
+        max_z = float(z_coords.max().item())
+        z_mask = (z_coords >= (max_z - 0.2))
+        
+        # Point B: max x coordinate among high z points
+        x_coords = positions[:, 0]
+        x_coords_filtered = x_coords.clone()
+        x_coords_filtered[~z_mask] = float('-inf')
+        point_b_idx = int(x_coords_filtered.argmax().item())
+        
+        # Point C: max y coordinate among high z points
+        y_coords = positions[:, 1]
+        y_coords_filtered = y_coords.clone()
+        y_coords_filtered[~z_mask] = float('-inf')
+        point_c_idx = int(y_coords_filtered.argmax().item())
+        
+        return [point_a_idx, point_b_idx, point_c_idx]
+
+    def get_keypoint_coordinates(self, t, indices):
+        """Returns coordinates of points specified by indices from the cached positions at timestep t.
+        
+        Args:
+            t (int): The timestep to get the coordinates from
+            indices (list): List of point indices to get coordinates for
+            
+        Returns:
+            numpy.ndarray: Array of shape (n, 3) containing coordinates of the points
+        """
+        cur_step_name = f'{t:06d}'
+        if cur_step_name not in self.cache:
+            raise KeyError(f"No cached data found for timestep {t}")
+            
+        # Get all positions
+        positions = self.cache[cur_step_name]['pos']
+        
+        # Extract coordinates for specified indices
+        coords = positions[indices].cpu().numpy()
+        return coords

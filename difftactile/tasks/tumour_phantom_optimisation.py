@@ -107,6 +107,28 @@ class Contact(ContactVisualisation):
         self.interpolation_exp_frame_end = ti.field(dtype=ti.i32, shape=(), needs_grad=False)
         self.interpolation_alpha = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
 
+        v_npy = np.array([
+            [10, 0, 0, 0, 0, 0],
+            [-10, 0, 0, 0, 0, 0],
+
+            [0, 10, 0, 0, 0, 0],
+            [0, -10, 0, 0, 0, 0],
+            
+            [0, 0, 10, 0, 0, 0],
+            [0, 0, -10, 0, 0, 0],
+            
+            [0, 0, 0, 90, 0, 0],
+            [0, 0, 0, -90, 0, 0],
+            
+            [0, 0, 0, 0, 90, 0],
+            [0, 0, 0, 0, -90, 0],
+            
+            [0, 0, 0, 0, 0, 90],
+            [0, 0, 0, 0, 0, -90]
+        ], dtype=float)
+        self.v = ti.Vector.field(6, dtype=float, shape=v_npy.shape[0], needs_grad=False)
+        self.v.from_numpy(v_npy)
+
     def set_up_initial_positions(self):
         phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
         tactile_sensor_pose = [12.5, 11.5, 6.30625+50, -90, 0, 0]
@@ -145,6 +167,14 @@ class Contact(ContactVisualisation):
         for i in range(self.num_frames):
             self.p_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
             self.o_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
+        
+        frames_to_skip = 100
+        frames_per_motion = 100
+        
+        for i in range(self.v.shape[0]):
+            for j in range(frames_to_skip + i * frames_per_motion, frames_to_skip + (i+1) * frames_per_motion):
+                self.p_sensor1[j] = ti.Vector([self.v[i][0], self.v[i][1], self.v[i][2]], dt=ti.f32)
+                self.o_sensor1[j] = ti.Vector([self.v[i][3], self.v[i][4], self.v[i][5]], dt=ti.f32)
 
     @ti.kernel
     def set_pos_control(self, f: ti.i32):
@@ -390,6 +420,8 @@ def main():
     contact_model.set_up_trajectory()
     np.savetxt(f'output/trajectory.p_sensor1.csv', contact_model.p_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
     np.savetxt(f'output/trajectory.o_sensor1.csv', contact_model.o_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
+    
+    
     xyz = (0, 0, 0)
     for opts in range(num_opt_steps):
         print("Opt # step ======================", opts)
@@ -404,13 +436,17 @@ def main():
             for ss in range(num_sub_frames - 1):
                 contact_model.update(ss)
             contact_model.memory_to_cache(ts)
-            if ts == 0:
-                dome_tip_ix = contact_model.fem_sensor1.get_min_z_ix_from_cache(ts)
+            if opts == 0 and ts == 0:
+                dome_tip_ix = contact_model.fem_sensor1.get_min_z_ix(ts)
+                keypoint_indices = contact_model.fem_sensor1.get_keypoint_indices(0)
             xyz, _ = contact_model.fem_sensor1.get_xyz_angle_from_cache(ts, dome_tip_ix)
             contact_model.interpolate_experimental_video(ts)
             contact_model.compute_marker_loss_1(ts)
             contact_model.compute_marker_loss_2()
-            update_gui(contact_model, gui_tuple, num_frames, ts, xyz)
+            
+            # Get keypoint coordinates for visualization
+            keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(ts, keypoint_indices)
+            update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
 
         contact_model.loss.grad[None] = 1.0
         
@@ -433,7 +469,10 @@ def main():
                 contact_model.reset()
                 for ss in range(num_sub_frames - 1):
                     contact_model.update(ss)
-            update_gui(contact_model, gui_tuple, num_frames, ts, (0, 0, 0))
+            
+            # Get keypoint coordinates for visualization in backward pass
+            keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(ts, keypoint_indices)
+            update_gui(contact_model, gui_tuple, num_frames, ts, (0, 0, 0), keypoint_coords)
         
         print(f"Accumulated gradients after optimisation step {opts}:")
         print(f"kn grad: {contact_model.kn.grad[None]}")

@@ -25,52 +25,17 @@ class ContactVisualisation:
         self.sensor_points = ti.Vector.field(
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
-        key_points_npy = np.array([
-            [12.5, 11.5, 3.00625],
-            [12.5, 11.5, 3.00625 - 1],
-            [12.5 + 1, 11.5, 3.00625 - 1],
-        ], dtype=float)
-        key_point_colours_npy = np.array([
-            [1, 1, 1],
-            [1, 0, 0],
-            [0, 1, 0],
-        ], dtype=float)
-        self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=key_points_npy.shape[0], needs_grad=False)
-        self.key_point_colours = ti.Vector.field(3, dtype=ti.f32, shape=key_point_colours_npy.shape[0], needs_grad=False)
-        self.key_points.from_numpy(key_points_npy)
-        self.key_point_colours.from_numpy(key_point_colours_npy)
-        self.key_point = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
-
-        # self.healthy_tissue_points_idxs = ti.field(
-        #     dtype=int, shape=(self.mpm_object.group_cardinality[0],)
-        # )
-        # self.tumour_points_idxs = ti.field(
-        #     dtype=int, shape=(self.mpm_object.group_cardinality[1],)
-        # )
-        # self.healthy_tissue_points_idxs_counter = ti.field(dtype=int, shape=(), needs_grad=False)
-        # self.tumour_points_idxs_counter = ti.field(dtype=int, shape=(), needs_grad=False)
-        # self.healthy_tissue_points_idxs_counter[None] = 0
-        # self.tumour_points_idxs_counter[None] = 0
-
-        # self.fill_out_per_tissue_points_idxs()
-
+        
+        # Initialize key points field
+        self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=(3,), needs_grad=False)
+        
         self.healthy_tissue_points = ti.Vector.field(
             3, dtype=float, shape=(self.mpm_object.n_particles)
         )
         self.tumour_points = ti.Vector.field(
             3, dtype=float, shape=(self.mpm_object.n_particles)
         )
-        
-    # @ti.kernel
-    # def fill_out_per_tissue_points_idxs(self):
-    #     for p in range(self.mpm_object.n_particles):
-    #         if self.mpm_object.titles[p] == 0:
-    #             self.healthy_tissue_points_idxs[self.healthy_tissue_points_idxs_counter[None]] = p
-    #             self.healthy_tissue_points_idxs_counter[None] += 1
-    #         elif self.mpm_object.titles[p] == 1:
-    #             self.tumour_points_idxs[self.tumour_points_idxs_counter[None]] = p
-    #             self.tumour_points_idxs_counter[None] += 1
-    
+
     @ti.kernel
     def draw_3d_scene(self, f: ti.i32):
         for p in range(self.mpm_object.n_particles):
@@ -219,9 +184,9 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(12.5, 11.5, 2.05625+40)
-        camera.up(1, 0, 0)
-        camera.lookat(12.5, 11.5, 2.05625)
+        camera.position(12.5, 11.5+50, 6.30625+50)
+        camera.up(0, 0, 1)
+        camera.lookat(12.5, 11.5, 6.30625+50)
         camera.fov(20)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
@@ -238,12 +203,10 @@ def set_up_gui():
         
         return (gui1, gui2, gui3, camera, scene, window, canvas)
 
-def update_gui(contact_model, gui_tuple, num_frames, ts, xyz):
+def update_gui(contact_model, gui_tuple, num_frames, ts, key_points_coords=None):
     if off_screen:
         return
     gui1, gui2, gui3, camera, scene, window, canvas = gui_tuple
-
-    contact_model.key_point[0] = ti.Vector(xyz)
 
     if False:
         a = 12.50
@@ -299,14 +262,11 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, xyz):
             gui2.show()
         if enable_gui3:
             gui3.show()
-        # camera.track_user_inputs(window, movement_speed=0.2, hold_key=ti.ui.RMB)
+        
         scene.set_camera(camera)
         scene.ambient_light((0.8, 0.8, 0.8))
         scene.point_light(pos=(0.5, 1.5, 1.5), color=(1, 1, 1))
         contact_model.draw_3d_scene(0)
-        # if ts == 10:
-        #     np.savetxt('output/contact_model.phantom_points_colours.csv', contact_model.phantom_points_colours.to_numpy(), delimiter=",", fmt='%.1f')
-        #     print('done')
         
         scene.particles(
             contact_model.healthy_tissue_points,
@@ -320,40 +280,18 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, xyz):
         )
         scene.particles(
             contact_model.sensor_points,
-            color=(0.0, 1.0, 0.0),
-            radius=0.1,
+            color=(0.0, 0.0, 1.0),
+            radius=0.05,
         )
-        if False:
-            print('contact_model.healthy_tissue_points')
-            print(contact_model.healthy_tissue_points)
-            print()
-            print('contact_model.sensor_points')
-            print(contact_model.sensor_points)
-            print()
-            phantom_npy = contact_model.healthy_tissue_points.to_numpy()
-            sensor_npy = contact_model.sensor_points.to_numpy()
-            np.savetxt('output/phantom_coords.csv', phantom_npy, delimiter=",", fmt='%.2f')
-            np.savetxt('output/sensor_coords.csv', sensor_npy, delimiter=",", fmt='%.2f')
-            axiz = 0
-            phantom_min = np.min(phantom_npy, axis=axiz)
-            phantom_max = np.max(phantom_npy, axis=axiz)
-            sensor_min = np.min(sensor_npy, axis=axiz)
-            sensor_max = np.max(sensor_npy, axis=axiz)
-            print(f'phantom min {phantom_min} max {phantom_max}')
-            print(f'sensor min {sensor_min} max {sensor_max}')
-
-            raise Exception("you shall not pass")
-        if False:
-            key_point_radius = 0.2
+        
+        # Update and draw key points if provided
+        if key_points_coords is not None:
+            contact_model.key_points.from_numpy(key_points_coords)
             scene.particles(
                 contact_model.key_points,
-                per_vertex_color=contact_model.key_point_colours,
-                radius=key_point_radius,
+                color=(1.0, 1.0, 0.0),
+                radius=0.1,
             )
-            scene.particles(
-                contact_model.key_point,
-                color=(0, 1, 1),
-                radius=key_point_radius,
-            )
+        
         canvas.scene(scene)
         window.show()
