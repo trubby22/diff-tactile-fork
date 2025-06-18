@@ -11,6 +11,7 @@ import numpy as np
 import pickle
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
+import sys
 
 RUN_ON_LAB_MACHINE = True
 SLOW_DOWN = 0.5
@@ -168,7 +169,7 @@ class Contact(ContactVisualisation):
             self.p_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
             self.o_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
         
-        frames_to_skip = 100
+        frames_to_skip = 0
         frames_per_motion = 100
         
         for i in range(self.v.shape[0]):
@@ -180,6 +181,17 @@ class Contact(ContactVisualisation):
     def set_pos_control(self, f: ti.i32):
         self.fem_sensor1.d_pos[None] = self.p_sensor1[f]
         self.fem_sensor1.d_ori[None] = self.o_sensor1[f]
+
+    def set_pos_control_print(self, f: int):
+        print("\nInput position vector (p_sensor1):")
+        print(self.p_sensor1[f].to_numpy())
+        print("\nInput orientation vector (o_sensor1):")
+        print(self.o_sensor1[f].to_numpy())
+        print("\nSet position vector (d_pos):")
+        print(self.fem_sensor1.d_pos[None].to_numpy())
+        print("\nSet orientation vector (d_ori):")
+        print(self.fem_sensor1.d_ori[None].to_numpy())
+        print()
 
     def update(self, f):
         self.mpm_object.compute_new_F(f)
@@ -399,6 +411,7 @@ class Contact(ContactVisualisation):
 
 
 def main():
+    np.set_printoptions(precision=3, floatmode='maxprec', suppress=False)
     if RUN_ON_LAB_MACHINE:
         ti.init(debug=False, offline_cache=False, log_level=ti.ERROR, arch=ti.cuda, device_memory_GB=9)
     else:
@@ -427,8 +440,11 @@ def main():
         contact_model.clear_all_grad()
         print('forward')
         for ts in range(num_frames - 1):
+            print(f'forward time step: {ts}')
             contact_model.set_pos_control(ts)
+            contact_model.set_pos_control_print(ts)
             contact_model.fem_sensor1.set_pose_control()
+            contact_model.fem_sensor1.set_pose_control_print()
             contact_model.fem_sensor1.set_control_vel(0)
             contact_model.fem_sensor1.set_vel(0)
             contact_model.reset()
@@ -444,11 +460,14 @@ def main():
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(ts, keypoint_indices)
             keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
-
+            if ts == 10:
+                sys.exit()
+            
         contact_model.loss.grad[None] = 1.0
         
         print('backward')
         for ts in range(num_frames - 2, -1, -1):
+            print(f'backward time step: {ts}')
             contact_model.compute_marker_loss_2.grad()
             contact_model.compute_marker_loss_1.grad(ts)
             for ss in range(num_sub_frames - 2, -1, -1):
