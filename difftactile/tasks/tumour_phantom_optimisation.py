@@ -163,13 +163,13 @@ class Contact(ContactVisualisation):
             # [12.5, 11.5, 3.00625+50+5, -90, 0, 0],
 
             [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            [12.5, 11.5, 3.00625+50, -90+90, 0, 0],
+            [12.5, 11.5, 3.00625+50, -90+45, 0, 0],
 
             [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            [12.5, 11.5, 3.00625+50, -90, 90, 0],
+            [12.5, 11.5, 3.00625+50, -90, 45, 0],
 
             [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            [12.5, 11.5, 3.00625+50, -90, 0, 90],
+            [12.5, 11.5, 3.00625+50, -90, 0, 45],
 
             [12.5, 11.5, 3.00625+50, -90, 0, 0],
         ], dtype=float)
@@ -191,6 +191,8 @@ class Contact(ContactVisualisation):
         self.dwell_counter[None] = 0
         self.is_dwelling = ti.field(dtype=bool, shape=(), needs_grad=False)
         self.is_dwelling[None] = False
+        self.last_target_reached = ti.field(dtype=bool, shape=(), needs_grad=False)
+        self.last_target_reached[None] = False
 
     def set_up_initial_positions(self):
         phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
@@ -490,7 +492,8 @@ class Contact(ContactVisualisation):
         if not self.is_dwelling[None] and pos_error_magnitude < self.position_tolerance[None] and ori_error_magnitude < self.orientation_tolerance[None]:
             self.is_dwelling[None] = True
             self.dwell_counter[None] = 0
-            print(f'target {self.current_target_idx[None]} reached!')
+            if not self.last_target_reached[None]:
+                print(f'target {self.current_target_idx[None]} ({target}) reached!')
         
         # If dwelling, increment counter and check if dwell time is complete
         if self.is_dwelling[None]:
@@ -513,13 +516,15 @@ class Contact(ContactVisualisation):
                     # Recompute errors for new target
                     pos_error = target_pos - current_pos
                     ori_error = target_ori - current_ori
+                else:
+                    self.last_target_reached[None] = True
         
         # If dwelling, set control outputs to zero to maintain position
-        if self.is_dwelling[None]:
+        if self.is_dwelling[None] or self.last_target_reached[None]:
             self.fem_sensor1.d_pos_global[None] = ti.Vector([0.0, 0.0, 0.0])
             self.fem_sensor1.d_ori_global_euler_angles[None] = ti.Vector([0.0, 0.0, 0.0])
 
-            if True:
+            if False:
                 print(f'We are dwelling')
                 print()
         else:
@@ -578,7 +583,7 @@ def main():
 
     phantom_name = "suturing-phantom.stl"
     num_sub_frames = 50
-    num_frames = 400
+    num_frames = 600
     num_opt_steps = 20
     dt = 5e-5
     contact_model = Contact(
@@ -597,7 +602,8 @@ def main():
         contact_model.clear_all_grad()
         print('forward')
         for ts in range(num_frames - 1):
-            print(f'forward time step: {ts}')
+            if ts % 50 == 0:
+                print(f'forward time step: {ts}')
             contact_model.compute_pid_control()
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_pose_control_maybe_print()
