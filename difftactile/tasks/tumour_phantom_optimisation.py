@@ -532,7 +532,20 @@ class Contact(ContactVisualisation):
             
             # Compute PID control output
             pos_control = self.pid_controller_kp[None] * pos_error + self.pid_controller_ki[None] * self.pos_error_sum[None] + self.pid_controller_kd[None] * pos_derivative
+            
+            # Clamp pos_control to max_speed
+            max_speed_pos = 40.0
+            pos_control_norm = pos_control.norm()
+            if pos_control_norm > max_speed_pos:
+                pos_control = pos_control / pos_control_norm * max_speed_pos
+            
             ori_control = self.pid_controller_kp[None] * ori_error + self.pid_controller_ki[None] * self.ori_error_sum[None] + self.pid_controller_kd[None] * ori_derivative
+            
+            # Clamp ori_control to max_speed_ori
+            max_speed_ori = 90.0
+            ori_control_norm = ori_control.norm()
+            if ori_control_norm > max_speed_ori:
+                ori_control = ori_control / ori_control_norm * max_speed_ori
 
             # Set control outputs
             self.fem_sensor1.d_pos_global[None] = pos_control

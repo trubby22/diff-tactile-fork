@@ -185,8 +185,8 @@ def set_up_gui():
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
         camera.position(8, 8, 3.60625+50)
         camera.up(0, 1, 0)
-        camera.lookat(8, 8, 3.60625)
-        camera.fov(30)
+        camera.lookat(14, 10.25, 3.60625)
+        camera.fov(25)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
         else:
