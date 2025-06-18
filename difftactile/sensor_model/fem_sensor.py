@@ -422,7 +422,8 @@ class FEMDomeSensor:
         point_a_idx = np.argmax(all_nodes[:, 1])
         point_a = all_nodes[point_a_idx]
         # Subtract point A's coordinates from all points
-        all_nodes -= point_a
+        if False:
+            all_nodes -= point_a
         triangle_nodes = np.array([all_nodes[:,0], layer_height, all_nodes[:,2]]).T
         all_f2v = Delaunay(triangle_nodes).simplices # M * 4 (tetrahedrons)
         layer_idxs = np.concatenate(layer_idxs,axis=0) # N
