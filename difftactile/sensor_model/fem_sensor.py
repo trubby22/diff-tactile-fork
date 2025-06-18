@@ -336,6 +336,45 @@ class FEMDomeSensor:
     def get_loc(self, f:ti.i32):
         return np.mean(self.pos.to_numpy()[f,:],axis=0)
 
+    @ti.kernel
+    def get_quaternion(self) -> ti.types.vector(4, ti.f32):
+        # Extract quaternion from rotation matrix
+        rot_mat = self.rot_h[None]
+
+        # Compute quaternion components
+        trace = rot_mat[0, 0] + rot_mat[1, 1] + rot_mat[2, 2]
+        qw = 0.0
+        qx = 0.0
+        qy = 0.0
+        qz = 0.0
+        
+        if trace > 0:
+            S = ti.sqrt(trace + 1.0) * 2
+            qw = 0.25 * S
+            qx = (rot_mat[2, 1] - rot_mat[1, 2]) / S
+            qy = (rot_mat[0, 2] - rot_mat[2, 0]) / S
+            qz = (rot_mat[1, 0] - rot_mat[0, 1]) / S
+        elif rot_mat[0, 0] > rot_mat[1, 1] and rot_mat[0, 0] > rot_mat[2, 2]:
+            S = ti.sqrt(1.0 + rot_mat[0, 0] - rot_mat[1, 1] - rot_mat[2, 2]) * 2
+            qw = (rot_mat[2, 1] - rot_mat[1, 2]) / S
+            qx = 0.25 * S
+            qy = (rot_mat[0, 1] + rot_mat[1, 0]) / S
+            qz = (rot_mat[0, 2] + rot_mat[2, 0]) / S
+        elif rot_mat[1, 1] > rot_mat[2, 2]:
+            S = ti.sqrt(1.0 + rot_mat[1, 1] - rot_mat[0, 0] - rot_mat[2, 2]) * 2
+            qw = (rot_mat[0, 2] - rot_mat[2, 0]) / S
+            qx = (rot_mat[0, 1] + rot_mat[1, 0]) / S
+            qy = 0.25 * S
+            qz = (rot_mat[1, 2] + rot_mat[2, 1]) / S
+        else:
+            S = ti.sqrt(1.0 + rot_mat[2, 2] - rot_mat[0, 0] - rot_mat[1, 1]) * 2
+            qw = (rot_mat[1, 0] - rot_mat[0, 1]) / S
+            qx = (rot_mat[0, 2] + rot_mat[2, 0]) / S
+            qy = (rot_mat[1, 2] + rot_mat[2, 1]) / S
+            qz = 0.25 * S
+            
+        return ti.Vector([qw, qx, qy, qz])
+
     def fibonacci_sphere(self, samples=100, scale = 1.0):
         # sample points evenly on a hemisphere
         phi = np.pi * (np.sqrt(5.0) - 1.0)  # golden angle in radians
@@ -731,64 +770,47 @@ class FEMDomeSensor:
         
         return (x, y, z), angle_rad
 
-    def get_keypoint_indices(self, t):
-        """Returns indices of 3 key points from the cached positions at timestep t.
-        
-        Args:
-            t (int): The timestep to get the indices from
-            
-        Returns:
-            list: List of 3 indices corresponding to:
-                - Point A: minimum z coordinate
-                - Point B: high z coordinate (within 0.2 of max), max x coordinate
-                - Point C: high z coordinate (within 0.2 of max), max y coordinate
-        """
-        cur_step_name = f'{t:06d}'
-        if cur_step_name not in self.cache:
-            raise KeyError(f"No cached data found for timestep {t}")
-            
-        # Get all positions
-        positions = self.cache[cur_step_name]['pos']
+    def get_keypoint_indices(self, f: ti.i32):
+        # Convert positions to numpy array
+        positions = self.pos.to_numpy()[f]
         
         # Point A: minimum z coordinate
         z_coords = positions[:, 2]
-        point_a_idx = int(z_coords.argmin().item())
+        point_a_idx = int(np.argmin(z_coords))
         
         # Points B and C: high z coordinate points
-        max_z = float(z_coords.max().item())
+        max_z = float(np.max(z_coords))
         z_mask = (z_coords >= (max_z - 0.2))
         
         # Point B: max x coordinate among high z points
         x_coords = positions[:, 0]
-        x_coords_filtered = x_coords.clone()
+        x_coords_filtered = x_coords.copy()
         x_coords_filtered[~z_mask] = float('-inf')
-        point_b_idx = int(x_coords_filtered.argmax().item())
+        point_b_idx = int(np.argmax(x_coords_filtered))
         
         # Point C: max y coordinate among high z points
         y_coords = positions[:, 1]
-        y_coords_filtered = y_coords.clone()
+        y_coords_filtered = y_coords.copy()
         y_coords_filtered[~z_mask] = float('-inf')
-        point_c_idx = int(y_coords_filtered.argmax().item())
+        point_c_idx = int(np.argmax(y_coords_filtered))
         
-        return [point_a_idx, point_b_idx, point_c_idx]
+        return np.array([point_a_idx, point_b_idx, point_c_idx])
 
-    def get_keypoint_coordinates(self, t, indices):
-        """Returns coordinates of points specified by indices from the cached positions at timestep t.
+    def get_keypoint_coordinates(self, f: int, keypoint_indices: np.ndarray) -> np.ndarray:
+        """
+        Get coordinates for specified keypoint indices at a given frame.
         
         Args:
-            t (int): The timestep to get the coordinates from
-            indices (list): List of point indices to get coordinates for
+            f: Frame index
+            keypoint_indices: Array of keypoint indices to get coordinates for
             
         Returns:
-            numpy.ndarray: Array of shape (n, 3) containing coordinates of the points
+            numpy array of shape (num_points, 3) containing the coordinates
         """
-        cur_step_name = f'{t:06d}'
-        if cur_step_name not in self.cache:
-            raise KeyError(f"No cached data found for timestep {t}")
-            
-        # Get all positions
-        positions = self.cache[cur_step_name]['pos']
+        # Convert positions to numpy array for the given frame
+        positions = self.pos.to_numpy()[f]
         
-        # Extract coordinates for specified indices
-        coords = positions[indices].cpu().numpy()
-        return coords
+        # Extract coordinates for the specified indices
+        coordinates = positions[keypoint_indices]
+        
+        return coordinates

@@ -45,6 +45,9 @@ class Contact(ContactVisualisation):
         )
         self.set_up_initial_positions()
 
+        # Initialize keypoint indices
+        self.keypoint_indices = self.fem_sensor1.get_keypoint_indices(0)
+
         self.kn = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kd = ti.field(dtype=float, shape=(), needs_grad=True)
         self.kt = ti.field(dtype=float, shape=(), needs_grad=True)
@@ -55,6 +58,8 @@ class Contact(ContactVisualisation):
         self.friction_coeff[None] = 14.16
         self.fem_sensor1.mu[None] = 1294.01
         self.fem_sensor1.lam[None] = 9201.11
+
+        
 
         self.num_sensor = 1
         self.contact_idx = ti.Vector.field(
@@ -129,6 +134,62 @@ class Contact(ContactVisualisation):
         ], dtype=float)
         self.v = ti.Vector.field(6, dtype=float, shape=v_npy.shape[0], needs_grad=False)
         self.v.from_numpy(v_npy)
+
+        # PID controller parameters
+        self.pid_controller_kp = ti.field(dtype=float, shape=(), needs_grad=True)  # Proportional gain
+        self.pid_controller_ki = ti.field(dtype=float, shape=(), needs_grad=True)  # Integral gain
+        self.pid_controller_kd = ti.field(dtype=float, shape=(), needs_grad=True)  # Derivative gain
+        self.pid_controller_kp[None] = 100.0  # Initial values - these may need tuning
+        self.pid_controller_ki[None] = 10.0
+        self.pid_controller_kd[None] = 1.0
+        
+        # Error accumulation for integral term
+        self.pos_error_sum = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)
+        self.ori_error_sum = ti.Vector.field(4, dtype=float, shape=(), needs_grad=True)
+        
+        # Previous error for derivative term
+        self.prev_pos_error = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)
+        self.prev_ori_error = ti.Vector.field(4, dtype=float, shape=(), needs_grad=True)
+
+        target_positions_npy = np.array([
+            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            [12.5+5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+
+            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            [12.5, 11.5+5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+
+            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            [12.5, 11.5, 3.00625+50+5, -0.7071068, 0, 0, 0.7071068],
+
+            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            [12.5, 11.5, 3.00625+50, 0, 0, 0, 1],
+
+            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            [12.5, 11.5, 3.00625+50, -0.5, 0.5, -0.5, 0.5],
+
+            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            [12.5, 11.5, 3.00625+50, -0.5, 0.5, 0.5, 0.5],
+
+            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+        ], dtype=float)
+        self.target_positions = ti.Vector.field(7, dtype=float, shape=target_positions_npy.shape[0], needs_grad=False)
+        self.target_positions.from_numpy(target_positions_npy)
+
+        # Add fields to track current target and control state
+        self.current_target_idx = ti.field(dtype=int, shape=(), needs_grad=False)
+        self.current_target_idx[None] = 0
+        self.position_tolerance = ti.field(dtype=float, shape=(), needs_grad=False)
+        self.position_tolerance[None] = 0.1  # 1mm tolerance
+        self.orientation_tolerance = ti.field(dtype=float, shape=(), needs_grad=False)
+        self.orientation_tolerance[None] = 1.0  # 1 degree tolerance
+        
+        # Add fields for dwell time control
+        self.dwell_frames = ti.field(dtype=int, shape=(), needs_grad=False)
+        self.dwell_frames[None] = 50  # Number of frames to stay at each target
+        self.dwell_counter = ti.field(dtype=int, shape=(), needs_grad=False)
+        self.dwell_counter[None] = 0
+        self.is_dwelling = ti.field(dtype=bool, shape=(), needs_grad=False)
+        self.is_dwelling[None] = False
 
     def set_up_initial_positions(self):
         phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
@@ -410,6 +471,77 @@ class Contact(ContactVisualisation):
         rmse = ti.sqrt(self.squared_error_sum[None] / self.fem_sensor1.num_markers)
         self.loss[None] += rmse
 
+    def compute_pid_control(self):
+        # Get current position and orientation using reference keypoint
+        current_pos = self.fem_sensor1.pos[0, self.keypoint_indices[0]]
+        current_ori = self.fem_sensor1.get_quaternion()
+        
+        # Get current target position and orientation
+        target = self.target_positions[self.current_target_idx[None]]
+        target_pos = ti.Vector([target[0], target[1], target[2]])
+        target_ori = ti.Vector([target[3], target[4], target[5], target[6]])
+        
+        # Compute position and orientation errors
+        pos_error = target_pos - current_pos
+        ori_error = target_ori - current_ori
+        
+        # Check if current target is reached
+        pos_error_magnitude = pos_error.norm()
+        ori_error_magnitude = ori_error.norm()
+        
+        # If target is reached and not already dwelling, start dwelling
+        if not self.is_dwelling[None] and pos_error_magnitude < self.position_tolerance[None] and ori_error_magnitude < self.orientation_tolerance[None]:
+            self.is_dwelling[None] = True
+            self.dwell_counter[None] = 0
+        
+        # If dwelling, increment counter and check if dwell time is complete
+        if self.is_dwelling[None]:
+            self.dwell_counter[None] += 1
+            if self.dwell_counter[None] >= self.dwell_frames[None]:
+                self.is_dwelling[None] = False
+                if self.current_target_idx[None] < self.target_positions.shape[0] - 1:
+                    self.current_target_idx[None] += 1
+                    # Reset error sums when switching targets
+                    self.pos_error_sum[None] = ti.Vector([0.0, 0.0, 0.0])
+                    self.ori_error_sum[None] = ti.Vector([0.0, 0.0, 0.0, 0.0])
+                    self.prev_pos_error[None] = ti.Vector([0.0, 0.0, 0.0])
+                    self.prev_ori_error[None] = ti.Vector([0.0, 0.0, 0.0, 0.0])
+                    
+                    # Get new target position and orientation
+                    target = self.target_positions[self.current_target_idx[None]]
+                    target_pos = ti.Vector([target[0], target[1], target[2]])
+                    target_ori = ti.Vector([target[3], target[4], target[5], target[6]])
+                    
+                    # Recompute errors for new target
+                    pos_error = target_pos - current_pos
+                    ori_error = target_ori - current_ori
+        
+        # If dwelling, set control outputs to zero to maintain position
+        if self.is_dwelling[None]:
+            self.fem_sensor1.d_pos_global[None] = ti.Vector([0.0, 0.0, 0.0])
+            self.fem_sensor1.d_ori_global[None] = ti.Vector([0.0, 0.0, 0.0, 0.0])
+            return
+        
+        # Update error sums for integral term
+        self.pos_error_sum[None] += pos_error * self.dt
+        self.ori_error_sum[None] += ori_error * self.dt
+        
+        # Compute derivative term
+        pos_derivative = (pos_error - self.prev_pos_error[None]) / self.dt
+        ori_derivative = (ori_error - self.prev_ori_error[None]) / self.dt
+        
+        # Store current error for next iteration
+        self.prev_pos_error[None] = pos_error
+        self.prev_ori_error[None] = ori_error
+        
+        # Compute PID control output
+        pos_control = self.pid_controller_kp[None] * pos_error + self.pid_controller_ki[None] * self.pos_error_sum[None] + self.pid_controller_kd[None] * pos_derivative
+        ori_control = self.pid_controller_kp[None] * ori_error + self.pid_controller_ki[None] * self.ori_error_sum[None] + self.pid_controller_kd[None] * ori_derivative
+        
+        # Set control outputs
+        self.fem_sensor1.d_pos_global[None] = pos_control
+        self.fem_sensor1.d_ori_global[None] = ori_control
+
 
 def main():
     np.set_printoptions(precision=3, floatmode='maxprec', suppress=False)
@@ -442,27 +574,20 @@ def main():
         print('forward')
         for ts in range(num_frames - 1):
             print(f'forward time step: {ts}')
-            contact_model.set_pos_control(ts)
-            contact_model.set_pos_control_maybe_print(ts)
+            contact_model.compute_pid_control()
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_pose_control_maybe_print()
-            contact_model.fem_sensor1.set_control_vel(0)
-            contact_model.fem_sensor1.set_vel(0)
             contact_model.reset()
             for ss in range(num_sub_frames - 1):
                 contact_model.update(ss)
             contact_model.memory_to_cache(ts)
-            if opts == 0 and ts == 0:
-                keypoint_indices = contact_model.fem_sensor1.get_keypoint_indices(0)
             contact_model.interpolate_experimental_video(ts)
             contact_model.compute_marker_loss_1(ts)
             contact_model.compute_marker_loss_2()
             
-            keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(ts, keypoint_indices)
+            keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(0, contact_model.keypoint_indices)
             keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
-            # if ts == 10:
-            #     sys.exit()
             
         contact_model.loss.grad[None] = 1.0
         
@@ -473,22 +598,17 @@ def main():
             contact_model.compute_marker_loss_1.grad(ts)
             for ss in range(num_sub_frames - 2, -1, -1):
                 contact_model.update_grad(ss)
-            contact_model.fem_sensor1.set_vel.grad(0)
-            contact_model.fem_sensor1.set_control_vel.grad(0)
             contact_model.fem_sensor1.set_pose_control.grad()
-            contact_model.set_pos_control.grad(ts)
 
             if (ts - 1) >= 0:
                 contact_model.memory_from_cache(ts - 1)
                 contact_model.set_pos_control(ts - 1)
                 contact_model.fem_sensor1.set_pose_control_bp()
-                contact_model.fem_sensor1.set_control_vel(0)
-                contact_model.fem_sensor1.set_vel(0)
                 contact_model.reset()
                 for ss in range(num_sub_frames - 1):
                     contact_model.update(ss)
             
-            keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(ts, keypoint_indices)
+            keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(0, contact_model.keypoint_indices)
             keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
         
