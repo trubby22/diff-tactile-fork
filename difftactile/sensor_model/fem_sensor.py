@@ -63,7 +63,7 @@ class FEMDomeSensor:
         self.surface_cam_virtual_loc = ti.Vector.field(2, float, self.num_surface, needs_grad=True)
 
         # cam model
-        self.num_k_closest = 5
+        self.num_k_closest = 1
         self.initial_markers, interp_idx, interp_weight = self.init_cam_model(init_img_path)
         self.num_markers = len(self.initial_markers)
 
@@ -199,6 +199,15 @@ class FEMDomeSensor:
         surf_2d = np.array(surf_2d)
         interp_idx = np.array(interp_idx)
         interp_weight = np.array(interp_weight)
+
+        # Flatten interp_idx before saving
+        interp_idx_flat = interp_idx.flatten()
+        with open(f"output/fem_sensor.interp_idx_flat.pkl", 'wb') as f:
+            pickle.dump(interp_idx_flat, f)
+        with open(f"output/fem_sensor.surface_id_np.pkl", 'wb') as f:
+            pickle.dump(self.surface_id_np, f)
+        np.savetxt('output/fem_sensor.interp_idx_flat.csv', interp_idx_flat, delimiter=",", fmt='%d')
+        np.savetxt('output/fem_sensor.surface_id_np.csv', self.surface_id_np, delimiter=",", fmt='%d')
 
         return surf_2d, interp_idx, interp_weight
 
