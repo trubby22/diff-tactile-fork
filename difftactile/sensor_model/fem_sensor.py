@@ -94,8 +94,11 @@ class FEMDomeSensor:
         self.out_direction = ti.Vector.field(3, float, (), needs_grad=True)
 
         ## control parameters
-        self.d_pos = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
-        self.d_ori = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
+        self.d_pos_global = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
+        self.d_ori_global = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
+
+        self.d_pos_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
+        self.d_ori_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
 
         self.rot_h = ti.Matrix.field(3, 3, ti.f32, shape = (), needs_grad=True)
         self.rot_world = ti.Matrix.field(3, 3, ti.f32, shape = ())
@@ -135,7 +138,7 @@ class FEMDomeSensor:
         self.trans_h[None] = self.trans_world[None] @ self.trans_local[None]
         self.inv_trans_h[None] = self.trans_local[None].inverse() @ self.trans_world[None].inverse()
 
-        if self.first[None]:
+        if False and self.first[None]:
             print("\nInitial rotation matrix (init_rot):")
             print(init_rot)
             print("\nInitial transformation matrix (trans_mat):")
@@ -258,9 +261,11 @@ class FEMDomeSensor:
     @ti.kernel
     def set_pose_control(self):
         # this is in local coord
+        self.d_pos_local[None] = self.inv_rot[None] @ self.d_pos_global[None]
+        self.d_ori_local[None] = self.inv_rot[None] @ self.d_ori_global[None]
 
-        self.my_rot_v[None] = self.d_ori[None] * self.dt * (self.sub_steps -1)
-        self.my_trans_v[None] = self.d_pos[None] * self.dt * (self.sub_steps -1)
+        self.my_rot_v[None] = self.d_ori_local[None] * self.dt * (self.sub_steps -1)
+        self.my_trans_v[None] = self.d_pos_local[None] * self.dt * (self.sub_steps -1)
         self.my_trans_mat[None], self.my_rot_mat[None] = self.eul2mat(self.my_rot_v[None], self.my_trans_v[None])
 
         self.dtrans_h[None] = self.trans_world[None] @ self.my_trans_mat[None] @ (self.trans_world[None].inverse())
@@ -273,36 +278,37 @@ class FEMDomeSensor:
         self.rot_h[None] = self.rot_world[None] @ self.rot_local[None]
         self.inv_rot[None] = self.rot_h[None].inverse()
 
-    def set_pose_control_print(self):
-        print("\nInput rotation vector (self.my_rot_v[None]):")
-        print(self.my_rot_v[None].to_numpy())
-        print("\nInput translation vector (self.my_trans_v[None]):")
-        print(self.my_trans_v[None].to_numpy())
-        print("\nComputed transformation matrix (self.my_trans_mat[None]):")
-        print(self.my_trans_mat[None].to_numpy())
-        print("\nComputed rotation matrix (self.my_rot_mat[None]):")
-        print(self.my_rot_mat[None].to_numpy())
-        print("\nDelta transformation matrix (dtrans_h):")
-        print(self.dtrans_h[None].to_numpy())
-        print("\nLocal transformation matrix (trans_local):")
-        print(self.trans_local[None].to_numpy())
-        print("\nHomogeneous transformation matrix (trans_h):")
-        print(self.trans_h[None].to_numpy())
-        print("\nInverse transformation matrix (inv_trans_h):")
-        print(self.inv_trans_h[None].to_numpy())
-        print("\nLocal rotation matrix (rot_local):")
-        print(self.rot_local[None].to_numpy())
-        print("\nHomogeneous rotation matrix (rot_h):")
-        print(self.rot_h[None].to_numpy())
-        print("\nInverse rotation matrix (inv_rot):")
-        print(self.inv_rot[None].to_numpy())
-        print()
+    def set_pose_control_maybe_print(self):
+        if False:
+            print("\nInput rotation vector (self.my_rot_v[None]):")
+            print(self.my_rot_v[None].to_numpy())
+            print("\nInput translation vector (self.my_trans_v[None]):")
+            print(self.my_trans_v[None].to_numpy())
+            print("\nComputed transformation matrix (self.my_trans_mat[None]):")
+            print(self.my_trans_mat[None].to_numpy())
+            print("\nComputed rotation matrix (self.my_rot_mat[None]):")
+            print(self.my_rot_mat[None].to_numpy())
+            print("\nDelta transformation matrix (dtrans_h):")
+            print(self.dtrans_h[None].to_numpy())
+            print("\nLocal transformation matrix (trans_local):")
+            print(self.trans_local[None].to_numpy())
+            print("\nHomogeneous transformation matrix (trans_h):")
+            print(self.trans_h[None].to_numpy())
+            print("\nInverse transformation matrix (inv_trans_h):")
+            print(self.inv_trans_h[None].to_numpy())
+            print("\nLocal rotation matrix (rot_local):")
+            print(self.rot_local[None].to_numpy())
+            print("\nHomogeneous rotation matrix (rot_h):")
+            print(self.rot_h[None].to_numpy())
+            print("\nInverse rotation matrix (inv_rot):")
+            print(self.inv_rot[None].to_numpy())
+            print()
 
     @ti.kernel
     def set_pose_control_bp(self):
 
-        rot_v = self.d_ori[None] * self.dt * (self.sub_steps -1)
-        trans_v = self.d_pos[None] * self.dt * (self.sub_steps -1)
+        rot_v = self.d_ori_local[None] * self.dt * (self.sub_steps -1)
+        trans_v = self.d_pos_local[None] * self.dt * (self.sub_steps -1)
         trans_mat, rot_mat = self.eul2mat(rot_v, trans_v)
         self.dtrans_h[None] = self.trans_world[None] @ trans_mat @ (self.trans_world[None].inverse())
 
@@ -602,8 +608,8 @@ class FEMDomeSensor:
         self.lam.grad[None] = 0.0
         self.predict_markers.grad.fill(0.0)
         self.surface_cam_loc.grad.fill(0.0)
-        self.d_pos.grad[None].fill(0.0)
-        self.d_ori.grad[None].fill(0.0)
+        self.d_pos_local.grad[None].fill(0.0)
+        self.d_ori_local.grad[None].fill(0.0)
         self.rot_h.grad[None].fill(0.0)
         self.rot_local.grad[None].fill(0.0)
         self.inv_rot.grad[None].fill(0.0)

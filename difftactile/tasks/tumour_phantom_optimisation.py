@@ -179,19 +179,20 @@ class Contact(ContactVisualisation):
 
     @ti.kernel
     def set_pos_control(self, f: ti.i32):
-        self.fem_sensor1.d_pos[None] = self.p_sensor1[f]
-        self.fem_sensor1.d_ori[None] = self.o_sensor1[f]
+        self.fem_sensor1.d_pos_global[None] = self.p_sensor1[f]
+        self.fem_sensor1.d_ori_global[None] = self.o_sensor1[f]
 
-    def set_pos_control_print(self, f: int):
-        print("\nInput position vector (p_sensor1):")
-        print(self.p_sensor1[f].to_numpy())
-        print("\nInput orientation vector (o_sensor1):")
-        print(self.o_sensor1[f].to_numpy())
-        print("\nSet position vector (d_pos):")
-        print(self.fem_sensor1.d_pos[None].to_numpy())
-        print("\nSet orientation vector (d_ori):")
-        print(self.fem_sensor1.d_ori[None].to_numpy())
-        print()
+    def set_pos_control_maybe_print(self, f: int):
+        if False:
+            print("\nInput position vector (p_sensor1):")
+            print(self.p_sensor1[f].to_numpy())
+            print("\nInput orientation vector (o_sensor1):")
+            print(self.o_sensor1[f].to_numpy())
+            print("\nSet position vector (d_pos):")
+            print(self.fem_sensor1.d_pos_global[None].to_numpy())
+            print("\nSet orientation vector (d_ori):")
+            print(self.fem_sensor1.d_ori_global[None].to_numpy())
+            print()
 
     def update(self, f):
         self.mpm_object.compute_new_F(f)
@@ -442,9 +443,9 @@ def main():
         for ts in range(num_frames - 1):
             print(f'forward time step: {ts}')
             contact_model.set_pos_control(ts)
-            contact_model.set_pos_control_print(ts)
+            contact_model.set_pos_control_maybe_print(ts)
             contact_model.fem_sensor1.set_pose_control()
-            contact_model.fem_sensor1.set_pose_control_print()
+            contact_model.fem_sensor1.set_pose_control_maybe_print()
             contact_model.fem_sensor1.set_control_vel(0)
             contact_model.fem_sensor1.set_vel(0)
             contact_model.reset()
@@ -460,8 +461,8 @@ def main():
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(ts, keypoint_indices)
             keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
-            if ts == 10:
-                sys.exit()
+            # if ts == 10:
+            #     sys.exit()
             
         contact_model.loss.grad[None] = 1.0
         

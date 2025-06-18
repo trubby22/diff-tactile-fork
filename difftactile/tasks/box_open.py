@@ -182,8 +182,8 @@ class Contact:
     def set_pos_control(self, f:ti.i32):
         # print(self.p_sensor1[f], self.o_sensor1[f])
         # self.fem_sensor1.set_pose_control(self.p_sensor1[f], self.o_sensor1[f])
-        self.fem_sensor1.d_pos[None] = self.p_sensor1[f]
-        self.fem_sensor1.d_ori[None] = self.o_sensor1[f]
+        self.fem_sensor1.d_pos_local[None] = self.p_sensor1[f]
+        self.fem_sensor1.d_ori_local[None] = self.o_sensor1[f]
 
 
     def update(self, f):
@@ -384,8 +384,8 @@ class Contact:
 
     def apply_action(self, action, ts):
         d_pos1, d_ori1, d_pos2, d_ori2 = np.split(action, 4)
-        self.fem_sensor1.d_pos.from_numpy(d_pos1)
-        self.fem_sensor1.d_ori.from_numpy(d_ori1)
+        self.fem_sensor1.d_pos_local.from_numpy(d_pos1)
+        self.fem_sensor1.d_ori_local.from_numpy(d_ori1)
         self.fem_sensor1.set_pose_control()
         self.fem_sensor1.set_control_vel(0)
         self.fem_sensor1.set_vel(0)
@@ -517,8 +517,8 @@ class Contact:
         else:
             d_pos = np.array([action[0] + 0.8, action[1], action[2]])
             d_ori = np.array([action[3], action[4], action[5]])
-        self.fem_sensor1.d_pos.from_numpy(d_pos)
-        self.fem_sensor1.d_ori.from_numpy(d_ori)
+        self.fem_sensor1.d_pos_local.from_numpy(d_pos)
+        self.fem_sensor1.d_ori_local.from_numpy(d_ori)
         self.fem_sensor1.set_pose_control()
         self.fem_sensor1.set_control_vel(0)
         self.fem_sensor1.set_vel(0)
