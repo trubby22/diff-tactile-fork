@@ -26,7 +26,7 @@ class ContactVisualisation:
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
         
-        self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=(4,), needs_grad=False)
+        self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=(9,), needs_grad=False)
         
         self.healthy_tissue_points = ti.Vector.field(
             3, dtype=float, shape=(self.mpm_object.n_particles)
@@ -183,10 +183,10 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(12.5-35, 11.5-35, 3.00625)
-        camera.up(0, 0, 1)
-        camera.lookat(12.5, 11.5, 3.00625)
-        camera.fov(15)
+        camera.position(8, 8, 3.60625+50)
+        camera.up(0, 1, 0)
+        camera.lookat(8, 8, 3.60625)
+        camera.fov(30)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
         else:
@@ -279,7 +279,7 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, key_points_coords=None)
         )
         scene.particles(
             contact_model.sensor_points,
-            color=(0.0, 0.0, 1.0),
+            color=(0.0, 1.0, 0.0),
             radius=0.05,
         )
         

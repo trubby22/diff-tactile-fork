@@ -39,7 +39,7 @@ class Contact(ContactVisualisation):
             sub_steps=num_sub_frames,
             obj_name=obj,
             space_scale=30.0,
-            obj_scale=15.0,
+            obj_scale=18.0,
             density=1.5,
             rho=1.07,
         )
@@ -58,8 +58,6 @@ class Contact(ContactVisualisation):
         self.friction_coeff[None] = 14.16
         self.fem_sensor1.mu[None] = 1294.01
         self.fem_sensor1.lam[None] = 9201.11
-
-        
 
         self.num_sensor = 1
         self.contact_idx = ti.Vector.field(
@@ -153,25 +151,17 @@ class Contact(ContactVisualisation):
 
         # Target positions now use Euler angles (in degrees) instead of quaternions
         target_positions_npy = np.array([
-            [12.5, 11.5, 3.00625, -90, 0, 0],
-
-            # press-slide
-            [12.5, 11.5, 3.00625-1, -90, 0, 0],
-            [12.5+1, 11.5, 3.00625-1, -90, 0, 0],
-            [12.5, 11.5, 3.00625-1, -90, 0, 0],
-            [12.5, 11.5, 3.00625, -90, 0, 0],
-
-            # press-twist-x
-            [12.5, 11.5, 3.00625-1, -90, 0, 0],
-            [12.5, 11.5, 3.00625-1, -90+20, 0, 0],
-            [12.5, 11.5, 3.00625-1, -90, 0, 0],
-            [12.5, 11.5, 3.00625, -90, 0, 0],
-
-            # press-twist-z
-            [12.5, 11.5, 3.00625-1, -90, 0, 0],
-            [12.5, 11.5, 3.00625-1, -90, 0, 20],
-            [12.5, 11.5, 3.00625-1, -90, 0, 0],
-            [12.5, 11.5, 3.00625, -90, 0, 0],
+            [8, 8, 3.60625, -90, 0, 0],
+            [8, 8, 3.60625-1, -90, 0, 0],
+            [8+12, 8, 3.60625-1, -90, 0, 0],
+            [8+12, 8+1.4, 3.60625-1, -90, 0, 0],
+            [8, 8+1.4, 3.60625-1, -90, 0, 0],
+            [8, 8+2.8, 3.60625-1, -90, 0, 0],
+            [8+12, 8+2.8, 3.60625-1, -90, 0, 0],
+            [8+12, 8+4.2, 3.60625-1, -90, 0, 0],
+            [8, 8+4.2, 3.60625-1, -90, 0, 0],
+            [8, 8+5.6, 3.60625-1, -90, 0, 0],
+            [8+12, 8+5.6, 3.60625-1, -90, 0, 0],
         ], dtype=float)
         self.target_positions = ti.Vector.field(6, dtype=float, shape=target_positions_npy.shape[0], needs_grad=False)  # Changed from 7 to 6
         self.target_positions.from_numpy(target_positions_npy)
@@ -195,8 +185,8 @@ class Contact(ContactVisualisation):
         self.last_target_reached[None] = False
 
     def set_up_initial_positions(self):
-        phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
-        tactile_sensor_pose = [12.5, 11.5, 3.00625, -90, 0, 0]
+        phantom_pose = [14, 10.25, 2.50625, 0, 0, 0]
+        tactile_sensor_pose = [8, 8, 3.60625, -90, 0, 0]
         
         self.mpm_object.init(
             pos=phantom_pose[:3],
@@ -581,9 +571,9 @@ def main():
 
     gui_tuple = set_up_gui()
 
-    phantom_name = "suturing-phantom.stl"
+    phantom_name = "vascular-phantom.stl"
     num_sub_frames = 50
-    num_frames = 700
+    num_frames = 2_000
     num_opt_steps = 20
     dt = 5e-5
     contact_model = Contact(
@@ -618,7 +608,14 @@ def main():
             contact_model.compute_marker_loss_2()
             
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(0, contact_model.keypoint_indices)
-            keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
+            keypoint_coords = np.vstack([keypoint_coords, np.array([
+                [8, 8, 3.60625],
+                [8+12, 8, 3.60625],
+                [8, 8+1.4, 3.60625],
+                [8, 8+2.8, 3.60625],
+                [8, 8+4.2, 3.60625],
+                [8, 8+5.6, 3.60625],
+            ], dtype=float)])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
 
             if ts == num_frames - 2:
