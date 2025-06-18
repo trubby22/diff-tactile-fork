@@ -183,7 +183,7 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(12.5-50, 11.5, 3.00625)
+        camera.position(12.5-35, 11.5-35, 3.00625)
         camera.up(0, 0, 1)
         camera.lookat(12.5, 11.5, 3.00625)
         camera.fov(15)
