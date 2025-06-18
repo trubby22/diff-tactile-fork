@@ -97,7 +97,7 @@ class FEMDomeSensor:
         self.d_pos_global = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
         self.d_ori_global_euler_angles = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
         self.d_ori_global_quaternion = ti.Vector.field(4, ti.f32, shape = (), needs_grad=True)
-        self.d_ori_global_quaternion = ti.Vector([0.0, 0.0, 0.0, 1.0])
+        self.d_ori_global_quaternion[None] = ti.Vector([0.0, 0.0, 0.0, 1.0])
 
         self.d_pos_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
         self.d_ori_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
@@ -279,6 +279,10 @@ class FEMDomeSensor:
         self.rot_local[None] = self.my_rot_mat[None] @ self.rot_local[None]
         self.rot_h[None] = self.rot_world[None] @ self.rot_local[None]
         self.inv_rot[None] = self.rot_h[None].inverse()
+
+        print(f'self.d_pos_global[None]: {self.d_pos_global[None]}')
+        print(f'self.d_pos_local[None]: {self.d_pos_local[None]}')
+        print()
     
     def d_ori_to_euler_angles(self):
         quaternion_npy = self.d_ori_global_quaternion.to_numpy()
@@ -348,10 +352,44 @@ class FEMDomeSensor:
     def get_loc(self, f:ti.i32):
         return np.mean(self.pos.to_numpy()[f,:],axis=0)
 
-    def get_quaternion(self):
-        rotation_obj = R.from_matrix(self.rot_h[None])
-        quaternion_npy = rotation_obj.as_quat()
-        return ti.Vector([quaternion_npy[0], quaternion_npy[1], quaternion_npy[2], quaternion_npy[3]])
+    @ti.func
+    def get_quaternion(self) -> ti.types.vector(4, ti.f32):
+        # Extract quaternion from rotation matrix
+        rot_mat = self.rot_h[None]
+
+        # Compute quaternion components
+        trace = rot_mat[0, 0] + rot_mat[1, 1] + rot_mat[2, 2]
+        qw = 0.0
+        qx = 0.0
+        qy = 0.0
+        qz = 0.0
+        
+        if trace > 0:
+            S = ti.sqrt(trace + 1.0) * 2
+            qw = 0.25 * S
+            qx = (rot_mat[2, 1] - rot_mat[1, 2]) / S
+            qy = (rot_mat[0, 2] - rot_mat[2, 0]) / S
+            qz = (rot_mat[1, 0] - rot_mat[0, 1]) / S
+        elif rot_mat[0, 0] > rot_mat[1, 1] and rot_mat[0, 0] > rot_mat[2, 2]:
+            S = ti.sqrt(1.0 + rot_mat[0, 0] - rot_mat[1, 1] - rot_mat[2, 2]) * 2
+            qw = (rot_mat[2, 1] - rot_mat[1, 2]) / S
+            qx = 0.25 * S
+            qy = (rot_mat[0, 1] + rot_mat[1, 0]) / S
+            qz = (rot_mat[0, 2] + rot_mat[2, 0]) / S
+        elif rot_mat[1, 1] > rot_mat[2, 2]:
+            S = ti.sqrt(1.0 + rot_mat[1, 1] - rot_mat[0, 0] - rot_mat[2, 2]) * 2
+            qw = (rot_mat[0, 2] - rot_mat[2, 0]) / S
+            qx = (rot_mat[0, 1] + rot_mat[1, 0]) / S
+            qy = 0.25 * S
+            qz = (rot_mat[1, 2] + rot_mat[2, 1]) / S
+        else:
+            S = ti.sqrt(1.0 + rot_mat[2, 2] - rot_mat[0, 0] - rot_mat[1, 1]) * 2
+            qw = (rot_mat[1, 0] - rot_mat[0, 1]) / S
+            qx = (rot_mat[0, 2] + rot_mat[2, 0]) / S
+            qy = (rot_mat[1, 2] + rot_mat[2, 1]) / S
+            qz = 0.25 * S
+            
+        return ti.Vector([qx, qy, qz, qw])
 
     def fibonacci_sphere(self, samples=100, scale = 1.0):
         # sample points evenly on a hemisphere

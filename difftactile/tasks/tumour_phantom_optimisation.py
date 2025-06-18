@@ -139,9 +139,9 @@ class Contact(ContactVisualisation):
         self.pid_controller_kp = ti.field(dtype=float, shape=(), needs_grad=True)  # Proportional gain
         self.pid_controller_ki = ti.field(dtype=float, shape=(), needs_grad=True)  # Integral gain
         self.pid_controller_kd = ti.field(dtype=float, shape=(), needs_grad=True)  # Derivative gain
-        self.pid_controller_kp[None] = 100.0  # Initial values - these may need tuning
-        self.pid_controller_ki[None] = 10.0
-        self.pid_controller_kd[None] = 1.0
+        self.pid_controller_kp[None] = 10.0  # Initial values - these may need tuning
+        self.pid_controller_ki[None] = 0.0
+        self.pid_controller_kd[None] = 0.0
         
         # Error accumulation for integral term
         self.pos_error_sum = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)
@@ -466,6 +466,7 @@ class Contact(ContactVisualisation):
         rmse = ti.sqrt(self.squared_error_sum[None] / self.fem_sensor1.num_markers)
         self.loss[None] += rmse
 
+    @ti.kernel
     def compute_pid_control(self):
         # Get current position and orientation using reference keypoint
         current_pos = self.fem_sensor1.pos[0, self.keypoint_indices[0]]
@@ -515,28 +516,54 @@ class Contact(ContactVisualisation):
         if self.is_dwelling[None]:
             self.fem_sensor1.d_pos_global[None] = ti.Vector([0.0, 0.0, 0.0])
             self.fem_sensor1.d_ori_global_quaternion[None] = ti.Vector([0.0, 0.0, 0.0, 1.0])
-            return
-        
-        # Update error sums for integral term
-        self.pos_error_sum[None] += pos_error * self.dt
-        self.ori_error_sum[None] += ori_error * self.dt
-        
-        # Compute derivative term
-        pos_derivative = (pos_error - self.prev_pos_error[None]) / self.dt
-        ori_derivative = (ori_error - self.prev_ori_error[None]) / self.dt
-        
-        # Store current error for next iteration
-        self.prev_pos_error[None] = pos_error
-        self.prev_ori_error[None] = ori_error
-        
-        # Compute PID control output
-        pos_control = self.pid_controller_kp[None] * pos_error + self.pid_controller_ki[None] * self.pos_error_sum[None] + self.pid_controller_kd[None] * pos_derivative
-        ori_control = self.pid_controller_kp[None] * ori_error + self.pid_controller_ki[None] * self.ori_error_sum[None] + self.pid_controller_kd[None] * ori_derivative
-        
-        # Set control outputs
-        self.fem_sensor1.d_pos_global[None] = pos_control
-        self.fem_sensor1.d_ori_global_quaternion[None] = ori_control
 
+            if True:
+                print(f'We are dwelling')
+                print()
+        else:
+            # Update error sums for integral term
+            self.pos_error_sum[None] += pos_error * self.dt
+            self.ori_error_sum[None] += ori_error * self.dt
+            
+            # Compute derivative term
+            pos_derivative = (pos_error - self.prev_pos_error[None]) / self.dt
+            ori_derivative = (ori_error - self.prev_ori_error[None]) / self.dt
+            
+            # Store current error for next iteration
+            self.prev_pos_error[None] = pos_error
+            self.prev_ori_error[None] = ori_error
+            
+            # Compute PID control output
+            pos_control = self.pid_controller_kp[None] * pos_error + self.pid_controller_ki[None] * self.pos_error_sum[None] + self.pid_controller_kd[None] * pos_derivative
+            ori_control = self.pid_controller_kp[None] * ori_error + self.pid_controller_ki[None] * self.ori_error_sum[None] + self.pid_controller_kd[None] * ori_derivative
+
+            # Set control outputs
+            self.fem_sensor1.d_pos_global[None] = pos_control
+            self.fem_sensor1.d_ori_global_quaternion[None] = ori_control
+        
+            if False:
+                # Print all variables used in the function
+                print("\nPID Control Variables:")
+                print(f"Current Position (current_pos): {current_pos}")
+                print(f"Current Orientation (current_ori): {current_ori}")
+                print(f"Target Position (target_pos): {target_pos}")
+                print(f"Target Orientation (target_ori): {target_ori}")
+                print(f"Position Error (pos_error): {pos_error}")
+                print(f"Orientation Error (ori_error): {ori_error}")
+                print(f"Position Error Magnitude (pos_error_magnitude): {pos_error_magnitude}")
+                print(f"Orientation Error Magnitude (ori_error_magnitude): {ori_error_magnitude}")
+                print(f"Position Error Sum (self.pos_error_sum[None]): {self.pos_error_sum[None]}")
+                print(f"Orientation Error Sum (self.ori_error_sum[None]): {self.ori_error_sum[None]}")
+                print(f"Previous Position Error (self.prev_pos_error[None]): {self.prev_pos_error[None]}")
+                print(f"Previous Orientation Error (self.prev_ori_error[None]): {self.prev_ori_error[None]}")
+                print(f"Position Derivative (pos_derivative): {pos_derivative}")
+                print(f"Orientation Derivative (ori_derivative): {ori_derivative}")
+                print(f"Position Control Output (pos_control): {pos_control}")
+                print(f"Orientation Control Output (ori_control): {ori_control}")
+                print(f"Current Target Index (self.current_target_idx[None]): {self.current_target_idx[None]}")
+                print(f"Is Dwelling (self.is_dwelling[None]): {self.is_dwelling[None]}")
+                print(f"Dwell Counter (self.dwell_counter[None]): {self.dwell_counter[None]}")
+                print()
 
 def main():
     np.set_printoptions(precision=3, floatmode='maxprec', suppress=False)
@@ -583,6 +610,9 @@ def main():
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(0, contact_model.keypoint_indices)
             keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
+
+            # if ts == 200:
+            #     sys.exit()
 
             if ts in set([0, 10, 100]):
                 np.savetxt(f'output/tactile_sensor.pos.time_step.{ts}.csv', contact_model.fem_sensor1.pos.to_numpy()[0], delimiter=",", fmt='%.2f')
