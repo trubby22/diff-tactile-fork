@@ -594,7 +594,7 @@ def main():
             contact_model.set_pos_control(ts)
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_control_vel(0)
-            contact_model.fem_sensor1.set_vel(0)                      
+            contact_model.fem_sensor1.set_vel(0)
             contact_model.reset()
             for ss in range(num_sub_steps - 1):
                 contact_model.update(ss)

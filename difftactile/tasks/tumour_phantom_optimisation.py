@@ -140,39 +140,40 @@ class Contact(ContactVisualisation):
         self.pid_controller_ki = ti.field(dtype=float, shape=(), needs_grad=True)  # Integral gain
         self.pid_controller_kd = ti.field(dtype=float, shape=(), needs_grad=True)  # Derivative gain
         self.pid_controller_kp[None] = 10.0  # Initial values - these may need tuning
-        self.pid_controller_ki[None] = 0.0
-        self.pid_controller_kd[None] = 0.0
+        self.pid_controller_ki[None] = 1.0
+        self.pid_controller_kd[None] = 1.0
         
         # Error accumulation for integral term
         self.pos_error_sum = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)
-        self.ori_error_sum = ti.Vector.field(4, dtype=float, shape=(), needs_grad=True)
+        self.ori_error_sum = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)  # Changed from 4 to 3 for Euler angles
         
         # Previous error for derivative term
         self.prev_pos_error = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)
-        self.prev_ori_error = ti.Vector.field(4, dtype=float, shape=(), needs_grad=True)
+        self.prev_ori_error = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)  # Changed from 4 to 3 for Euler angles
 
+        # Target positions now use Euler angles (in degrees) instead of quaternions
         target_positions_npy = np.array([
-            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
-            [12.5+5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            # [12.5, 11.5, 3.00625+50, -90, 0, 0],
+            # [12.5+5, 11.5, 3.00625+50, -90, 0, 0],
 
-            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
-            [12.5, 11.5+5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            # [12.5, 11.5, 3.00625+50, -90, 0, 0],
+            # [12.5, 11.5+5, 3.00625+50, -90, 0, 0],
 
-            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
-            [12.5, 11.5, 3.00625+50+5, -0.7071068, 0, 0, 0.7071068],
+            # [12.5, 11.5, 3.00625+50, -90, 0, 0],
+            # [12.5, 11.5, 3.00625+50+5, -90, 0, 0],
 
-            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
-            [12.5, 11.5, 3.00625+50, 0, 0, 0, 1],
+            [12.5, 11.5, 3.00625+50, -90, 0, 0],
+            [12.5, 11.5, 3.00625+50, -90+90, 0, 0],
 
-            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
-            [12.5, 11.5, 3.00625+50, -0.5, 0.5, -0.5, 0.5],
+            [12.5, 11.5, 3.00625+50, -90, 0, 0],
+            [12.5, 11.5, 3.00625+50, -90, 90, 0],
 
-            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
-            [12.5, 11.5, 3.00625+50, -0.5, 0.5, 0.5, 0.5],
+            [12.5, 11.5, 3.00625+50, -90, 0, 0],
+            [12.5, 11.5, 3.00625+50, -90, 0, 90],
 
-            [12.5, 11.5, 3.00625+50, -0.7071068, 0, 0, 0.7071068],
+            [12.5, 11.5, 3.00625+50, -90, 0, 0],
         ], dtype=float)
-        self.target_positions = ti.Vector.field(7, dtype=float, shape=target_positions_npy.shape[0], needs_grad=False)
+        self.target_positions = ti.Vector.field(6, dtype=float, shape=target_positions_npy.shape[0], needs_grad=False)  # Changed from 7 to 6
         self.target_positions.from_numpy(target_positions_npy)
 
         # Add fields to track current target and control state
@@ -193,7 +194,7 @@ class Contact(ContactVisualisation):
 
     def set_up_initial_positions(self):
         phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
-        tactile_sensor_pose = [12.5, 11.5, 6.30625+50, -90, 0, 0]
+        tactile_sensor_pose = [12.5, 11.5, 3.00625+50, -90, 0, 0]
         
         self.mpm_object.init(
             pos=phantom_pose[:3],
@@ -470,12 +471,12 @@ class Contact(ContactVisualisation):
     def compute_pid_control(self):
         # Get current position and orientation using reference keypoint
         current_pos = self.fem_sensor1.pos[0, self.keypoint_indices[0]]
-        current_ori = self.fem_sensor1.get_quaternion()
+        current_ori = self.fem_sensor1.get_euler_angles()
         
         # Get current target position and orientation
         target = self.target_positions[self.current_target_idx[None]]
         target_pos = ti.Vector([target[0], target[1], target[2]])
-        target_ori = ti.Vector([target[3], target[4], target[5], target[6]])
+        target_ori = ti.Vector([target[3], target[4], target[5]])  # Now using Euler angles
         
         # Compute position and orientation errors
         pos_error = target_pos - current_pos
@@ -489,6 +490,7 @@ class Contact(ContactVisualisation):
         if not self.is_dwelling[None] and pos_error_magnitude < self.position_tolerance[None] and ori_error_magnitude < self.orientation_tolerance[None]:
             self.is_dwelling[None] = True
             self.dwell_counter[None] = 0
+            print(f'target {self.current_target_idx[None]} reached!')
         
         # If dwelling, increment counter and check if dwell time is complete
         if self.is_dwelling[None]:
@@ -499,14 +501,14 @@ class Contact(ContactVisualisation):
                     self.current_target_idx[None] += 1
                     # Reset error sums when switching targets
                     self.pos_error_sum[None] = ti.Vector([0.0, 0.0, 0.0])
-                    self.ori_error_sum[None] = ti.Vector([0.0, 0.0, 0.0, 0.0])
+                    self.ori_error_sum[None] = ti.Vector([0.0, 0.0, 0.0])
                     self.prev_pos_error[None] = ti.Vector([0.0, 0.0, 0.0])
-                    self.prev_ori_error[None] = ti.Vector([0.0, 0.0, 0.0, 0.0])
+                    self.prev_ori_error[None] = ti.Vector([0.0, 0.0, 0.0])
                     
                     # Get new target position and orientation
                     target = self.target_positions[self.current_target_idx[None]]
                     target_pos = ti.Vector([target[0], target[1], target[2]])
-                    target_ori = ti.Vector([target[3], target[4], target[5], target[6]])
+                    target_ori = ti.Vector([target[3], target[4], target[5]])
                     
                     # Recompute errors for new target
                     pos_error = target_pos - current_pos
@@ -515,19 +517,19 @@ class Contact(ContactVisualisation):
         # If dwelling, set control outputs to zero to maintain position
         if self.is_dwelling[None]:
             self.fem_sensor1.d_pos_global[None] = ti.Vector([0.0, 0.0, 0.0])
-            self.fem_sensor1.d_ori_global_quaternion[None] = ti.Vector([0.0, 0.0, 0.0, 1.0])
+            self.fem_sensor1.d_ori_global_euler_angles[None] = ti.Vector([0.0, 0.0, 0.0])
 
             if True:
                 print(f'We are dwelling')
                 print()
         else:
             # Update error sums for integral term
-            self.pos_error_sum[None] += pos_error * self.dt
-            self.ori_error_sum[None] += ori_error * self.dt
+            self.pos_error_sum[None] += pos_error
+            self.ori_error_sum[None] += ori_error
             
             # Compute derivative term
-            pos_derivative = (pos_error - self.prev_pos_error[None]) / self.dt
-            ori_derivative = (ori_error - self.prev_ori_error[None]) / self.dt
+            pos_derivative = pos_error - self.prev_pos_error[None]
+            ori_derivative = ori_error - self.prev_ori_error[None]
             
             # Store current error for next iteration
             self.prev_pos_error[None] = pos_error
@@ -539,7 +541,7 @@ class Contact(ContactVisualisation):
 
             # Set control outputs
             self.fem_sensor1.d_pos_global[None] = pos_control
-            self.fem_sensor1.d_ori_global_quaternion[None] = ori_control
+            self.fem_sensor1.d_ori_global_euler_angles[None] = ori_control
         
             if False:
                 # Print all variables used in the function
@@ -576,7 +578,7 @@ def main():
 
     phantom_name = "suturing-phantom.stl"
     num_sub_frames = 50
-    num_frames = 2_000
+    num_frames = 400
     num_opt_steps = 20
     dt = 5e-5
     contact_model = Contact(
@@ -599,6 +601,8 @@ def main():
             contact_model.compute_pid_control()
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_pose_control_maybe_print()
+            contact_model.fem_sensor1.set_control_vel(0)
+            contact_model.fem_sensor1.set_vel(0)
             contact_model.reset()
             for ss in range(num_sub_frames - 1):
                 contact_model.update(ss)
@@ -611,8 +615,8 @@ def main():
             keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
 
-            # if ts == 200:
-            #     sys.exit()
+            if ts == num_frames - 2:
+                sys.exit()
 
             if ts in set([0, 10, 100]):
                 np.savetxt(f'output/tactile_sensor.pos.time_step.{ts}.csv', contact_model.fem_sensor1.pos.to_numpy()[0], delimiter=",", fmt='%.2f')
@@ -626,7 +630,10 @@ def main():
             contact_model.compute_marker_loss_1.grad(ts)
             for ss in range(num_sub_frames - 2, -1, -1):
                 contact_model.update_grad(ss)
+            contact_model.fem_sensor1.set_vel.grad(0)
+            contact_model.fem_sensor1.set_control_vel.grad(0)
             contact_model.fem_sensor1.set_pose_control.grad()
+            contact_model.compute_pid_control.grad()
 
             if (ts - 1) >= 0:
                 contact_model.memory_from_cache(ts - 1)

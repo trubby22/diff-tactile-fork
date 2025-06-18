@@ -96,8 +96,6 @@ class FEMDomeSensor:
         ## control parameters
         self.d_pos_global = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
         self.d_ori_global_euler_angles = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
-        self.d_ori_global_quaternion = ti.Vector.field(4, ti.f32, shape = (), needs_grad=True)
-        self.d_ori_global_quaternion[None] = ti.Vector([0.0, 0.0, 0.0, 1.0])
 
         self.d_pos_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
         self.d_ori_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
@@ -261,7 +259,7 @@ class FEMDomeSensor:
             self.vel[f, p] = self.control_vel[p]
 
     @ti.kernel
-    def set_pose_control_helper(self):
+    def set_pose_control(self):
         # this is in local coord
         self.d_pos_local[None] = self.inv_rot[None] @ self.d_pos_global[None]
         self.d_ori_local[None] = self.inv_rot[None] @ self.d_ori_global_euler_angles[None]
@@ -280,19 +278,11 @@ class FEMDomeSensor:
         self.rot_h[None] = self.rot_world[None] @ self.rot_local[None]
         self.inv_rot[None] = self.rot_h[None].inverse()
 
-        print(f'self.d_pos_global[None]: {self.d_pos_global[None]}')
-        print(f'self.d_pos_local[None]: {self.d_pos_local[None]}')
-        print()
-    
-    def d_ori_to_euler_angles(self):
-        quaternion_npy = self.d_ori_global_quaternion.to_numpy()
-        rotation_obj = R.from_quat(quaternion_npy)
-        euler_angles_npy = rotation_obj.as_euler('xyz', degrees=True)
-        self.d_ori_global_euler_angles.from_numpy(euler_angles_npy)
-    
-    def set_pose_control(self):
-        self.d_ori_to_euler_angles()
-        self.set_pose_control_helper()
+        if False:
+            print(f'self.d_pos_global[None]: {self.d_pos_global[None]}')
+            print(f'self.d_pos_local[None]: {self.d_pos_local[None]}')
+            print(f'target angular speed (rotation matrix): self.my_rot_mat[None]: {self.my_rot_mat[None]}')
+            print()
 
     def set_pose_control_maybe_print(self):
         if False:
@@ -348,48 +338,33 @@ class FEMDomeSensor:
             self.surf_f[f] += 1/3 * self.external_force_field[f,b] * self.dx
             self.surf_f[f] += 1/3 * self.external_force_field[f,c] * self.dx
 
-
-    def get_loc(self, f:ti.i32):
-        return np.mean(self.pos.to_numpy()[f,:],axis=0)
-
     @ti.func
-    def get_quaternion(self) -> ti.types.vector(4, ti.f32):
-        # Extract quaternion from rotation matrix
+    def get_euler_angles(self) -> ti.types.vector(3, ti.f32):
+        # Extract Euler angles from rotation matrix
         rot_mat = self.rot_h[None]
-
-        # Compute quaternion components
-        trace = rot_mat[0, 0] + rot_mat[1, 1] + rot_mat[2, 2]
-        qw = 0.0
-        qx = 0.0
-        qy = 0.0
-        qz = 0.0
         
-        if trace > 0:
-            S = ti.sqrt(trace + 1.0) * 2
-            qw = 0.25 * S
-            qx = (rot_mat[2, 1] - rot_mat[1, 2]) / S
-            qy = (rot_mat[0, 2] - rot_mat[2, 0]) / S
-            qz = (rot_mat[1, 0] - rot_mat[0, 1]) / S
-        elif rot_mat[0, 0] > rot_mat[1, 1] and rot_mat[0, 0] > rot_mat[2, 2]:
-            S = ti.sqrt(1.0 + rot_mat[0, 0] - rot_mat[1, 1] - rot_mat[2, 2]) * 2
-            qw = (rot_mat[2, 1] - rot_mat[1, 2]) / S
-            qx = 0.25 * S
-            qy = (rot_mat[0, 1] + rot_mat[1, 0]) / S
-            qz = (rot_mat[0, 2] + rot_mat[2, 0]) / S
-        elif rot_mat[1, 1] > rot_mat[2, 2]:
-            S = ti.sqrt(1.0 + rot_mat[1, 1] - rot_mat[0, 0] - rot_mat[2, 2]) * 2
-            qw = (rot_mat[0, 2] - rot_mat[2, 0]) / S
-            qx = (rot_mat[0, 1] + rot_mat[1, 0]) / S
-            qy = 0.25 * S
-            qz = (rot_mat[1, 2] + rot_mat[2, 1]) / S
-        else:
-            S = ti.sqrt(1.0 + rot_mat[2, 2] - rot_mat[0, 0] - rot_mat[1, 1]) * 2
-            qw = (rot_mat[1, 0] - rot_mat[0, 1]) / S
-            qx = (rot_mat[0, 2] + rot_mat[2, 0]) / S
-            qy = (rot_mat[1, 2] + rot_mat[2, 1]) / S
-            qz = 0.25 * S
-            
-        return ti.Vector([qx, qy, qz, qw])
+        # Extract roll (x-axis rotation)
+        roll = ti.math.atan2(rot_mat[2, 1], rot_mat[2, 2])
+        
+        # Extract pitch (y-axis rotation)
+        pitch = ti.math.atan2(-rot_mat[2, 0], ti.sqrt(rot_mat[2, 1] * rot_mat[2, 1] + rot_mat[2, 2] * rot_mat[2, 2]))
+        
+        # Extract yaw (z-axis rotation)
+        yaw = ti.math.atan2(rot_mat[1, 0], rot_mat[0, 0])
+        
+        # Convert to degrees
+        roll_deg = ti.math.degrees(roll)
+        pitch_deg = ti.math.degrees(pitch)
+        yaw_deg = ti.math.degrees(yaw)
+        
+        euler_angles = ti.Vector([roll_deg, pitch_deg, yaw_deg])
+
+        if False:
+            print(f'rotation matrix (self.rot_h[None]): {self.rot_h[None]}')
+            print(f'euler angles (euler_angles): {euler_angles}')
+            print()
+
+        return euler_angles
 
     def fibonacci_sphere(self, samples=100, scale = 1.0):
         # sample points evenly on a hemisphere
@@ -434,6 +409,11 @@ class FEMDomeSensor:
             num_cur_node += n_node
         layer_height = np.concatenate(layer_height, axis=0) # used for triangulation
         all_nodes = np.concatenate(all_nodes,axis=0) # N * 3
+        # Find point A with maximum y-value
+        point_a_idx = np.argmax(all_nodes[:, 1])
+        point_a = all_nodes[point_a_idx]
+        # Subtract point A's coordinates from all points
+        all_nodes -= point_a
         triangle_nodes = np.array([all_nodes[:,0], layer_height, all_nodes[:,2]]).T
         all_f2v = Delaunay(triangle_nodes).simplices # M * 4 (tetrahedrons)
         layer_idxs = np.concatenate(layer_idxs,axis=0) # N
@@ -443,10 +423,10 @@ class FEMDomeSensor:
             ('all_f2v', all_f2v),
             ('layer_idxs', layer_idxs),
         ]
-        # for x, y in pickles:
-        #     with open(f"output/tactile_sensor.{x}.pkl", 'wb') as f:
-        #         pickle.dump(y, f)
-        #     np.savetxt(f'output/tactile_sensor.{x}.csv', y, delimiter=",", fmt='%.2f')
+        for x, y in pickles:
+            with open(f"output/tactile_sensor.{x}.pkl", 'wb') as f:
+                pickle.dump(y, f)
+            np.savetxt(f'output/tactile_sensor.{x}.csv', y, delimiter=",", fmt='%.2f')
         return all_nodes, all_f2v, surface_f2v, layer_idxs
 
     @ti.kernel
