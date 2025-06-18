@@ -111,6 +111,9 @@ class FEMDomeSensor:
         self.cache = dict() # for grad backward
 
     def init(self, rot_x, rot_y, rot_z, t_dx, t_dy, t_dz):
+        # Set numpy print options for float formatting
+        np.set_printoptions(precision=1, floatmode='fixed', suppress=True)
+        
         rot = R.from_rotvec(np.deg2rad([rot_x, rot_y, rot_z]))
         init_rot = rot.as_matrix()
         trans_mat = np.eye(4)
@@ -126,6 +129,30 @@ class FEMDomeSensor:
         self.trans_world[None] = trans_mat
         self.trans_h[None] = self.trans_world[None] @ self.trans_local[None]
         self.inv_trans_h[None] = self.trans_local[None].inverse() @ self.trans_world[None].inverse()
+
+        if False:
+            print("\nInitial rotation matrix (init_rot):")
+            print(init_rot)
+            print("\nInitial transformation matrix (trans_mat):")
+            print(trans_mat)
+            print("\nLocal rotation matrix (rot_local):")
+            print(self.rot_local[None].to_numpy())
+            print("\nWorld rotation matrix (rot_world):")
+            print(self.rot_world[None].to_numpy())
+            print("\nHomogeneous rotation matrix (rot_h):")
+            print(self.rot_h[None].to_numpy())
+            print("\nInverse rotation matrix (inv_rot):")
+            print(self.inv_rot[None].to_numpy())
+            print("\nLocal transformation matrix (trans_local):")
+            print(self.trans_local[None].to_numpy())
+            print("\nWorld transformation matrix (trans_world):")
+            print(self.trans_world[None].to_numpy())
+            print("\nHomogeneous transformation matrix (trans_h):")
+            print(self.trans_h[None].to_numpy())
+            print("\nInverse transformation matrix (inv_trans_h):")
+            print(self.inv_trans_h[None].to_numpy())
+            print()
+
         self.init_pos()
         # with open(f"output/tactile_sensor.pos.pkl", 'wb') as f:
         #     pickle.dump(self.pos.to_numpy()[0], f)
@@ -222,35 +249,39 @@ class FEMDomeSensor:
             self.vel[f, p] = self.control_vel[p]
 
     @ti.kernel
-    def set_trans_h(self, d_pos:ti.types.vector(3, float), d_ori:ti.types.vector(3, float)):
-        # this is in world cood
-        rot_v = d_ori * self.dt * (self.sub_steps -1)
-        trans_v = d_pos * self.dt * (self.sub_steps -1)
-        trans_mat, rot_mat = self.eul2mat(rot_v, trans_v)
-        self.trans_h[None] = trans_mat @ self.trans_h[None]
-        self.inv_trans_h[None] = self.trans_h[None].inverse()
-
-        self.rot_h[None] = rot_mat @ self.rot_h[None]
-        self.inv_rot[None] = self.rot_h[None].inverse()
-
-    @ti.kernel
     def set_pose_control(self):
-        # this is in local coord
-
+        # Transform world coordinates to local coordinates
+        # First get the world rotation and translation
         rot_v = self.d_ori[None] * self.dt * (self.sub_steps -1)
         trans_v = self.d_pos[None] * self.dt * (self.sub_steps -1)
         trans_mat, rot_mat = self.eul2mat(rot_v, trans_v)
 
-        self.dtrans_h[None] = self.trans_world[None] @ trans_mat @ (self.trans_world[None].inverse())
+        # Transform the world transformation to local coordinates
+        # First create the world transformation
+        world_trans = self.trans_world[None] @ trans_mat @ (self.trans_world[None].inverse())
+        
+        # Extract rotation and translation from the world transformation
+        world_rot = ti.Matrix([[world_trans[0,0], world_trans[0,1], world_trans[0,2]],
+                             [world_trans[1,0], world_trans[1,1], world_trans[1,2]],
+                             [world_trans[2,0], world_trans[2,1], world_trans[2,2]]])
+        world_trans_vec = ti.Vector([world_trans[0,3], world_trans[1,3], world_trans[2,3]])
 
-        self.trans_local[None] = trans_mat @ self.trans_local[None]
+        # Apply the transformed rotation and translation to local coordinates
+        self.trans_local[None] = ti.Matrix.identity(float, 4)
+        for i in range(3):
+            for j in range(3):
+                self.trans_local[None][i,j] = world_rot[i,j]
+        for i in range(3):
+            self.trans_local[None][i,3] = world_trans_vec[i]
+
+        self.rot_local[None] = world_rot
+
+        # Update the homogeneous transformations
         self.trans_h[None] = self.trans_world[None] @ self.trans_local[None]
         self.inv_trans_h[None] = self.trans_h[None].inverse()
 
-        self.rot_local[None] = rot_mat @ self.rot_local[None]
         self.rot_h[None] = self.rot_world[None] @ self.rot_local[None]
         self.inv_rot[None] = self.rot_h[None].inverse()
-
 
     @ti.kernel
     def set_pose_control_bp(self):

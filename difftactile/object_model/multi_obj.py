@@ -42,7 +42,7 @@ class MultiObj:
             self.particles = ti.Vector.field(3, dtype=float, shape=self.n_particles)
             self.particles.from_numpy((obj_loader.particles * self.obj_scale).astype(np.float32))
             self.titles = ti.field(dtype=int, shape=self.n_particles)
-            print("Object model is loaded!")
+            # print("Object model is loaded!")
         else:
             print("ERR on loading object model")
 
@@ -115,7 +115,7 @@ class MultiObj:
         axiz = 0
         _min = np.min(self.particles.to_numpy(), axis=axiz)
         _max = np.max(self.particles.to_numpy(), axis=axiz)
-        if not self.first_init_done[None]:
+        if False and not self.first_init_done[None]:
             print(f'multi_obj min {_min} max {_max}')
         self.set_object_params(pos, ori, vel)
         self.init_object()

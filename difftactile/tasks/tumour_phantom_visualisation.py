@@ -26,8 +26,7 @@ class ContactVisualisation:
             3, dtype=float, shape=(self.fem_sensor1.n_verts)
         )
         
-        # Initialize key points field
-        self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=(3,), needs_grad=False)
+        self.key_points = ti.Vector.field(3, dtype=ti.f32, shape=(4,), needs_grad=False)
         
         self.healthy_tissue_points = ti.Vector.field(
             3, dtype=float, shape=(self.mpm_object.n_particles)
@@ -184,7 +183,7 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(12.5, 11.5+50, 6.30625+50)
+        camera.position(12.5, 11.5-50, 6.30625+50)
         camera.up(0, 0, 1)
         camera.lookat(12.5, 11.5, 6.30625+50)
         camera.fov(20)
@@ -284,7 +283,6 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, key_points_coords=None)
             radius=0.05,
         )
         
-        # Update and draw key points if provided
         if key_points_coords is not None:
             contact_model.key_points.from_numpy(key_points_coords)
             scene.particles(

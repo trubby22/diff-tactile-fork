@@ -421,12 +421,11 @@ def main():
     np.savetxt(f'output/trajectory.p_sensor1.csv', contact_model.p_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
     np.savetxt(f'output/trajectory.o_sensor1.csv', contact_model.o_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
     
-    
-    xyz = (0, 0, 0)
     for opts in range(num_opt_steps):
-        print("Opt # step ======================", opts)
+        print(f"optimisation step: {opts}")
         contact_model.set_up_initial_positions()
         contact_model.clear_all_grad()
+        print('forward')
         for ts in range(num_frames - 1):
             contact_model.set_pos_control(ts)
             contact_model.fem_sensor1.set_pose_control()
@@ -437,19 +436,18 @@ def main():
                 contact_model.update(ss)
             contact_model.memory_to_cache(ts)
             if opts == 0 and ts == 0:
-                dome_tip_ix = contact_model.fem_sensor1.get_min_z_ix(ts)
                 keypoint_indices = contact_model.fem_sensor1.get_keypoint_indices(0)
-            xyz, _ = contact_model.fem_sensor1.get_xyz_angle_from_cache(ts, dome_tip_ix)
             contact_model.interpolate_experimental_video(ts)
             contact_model.compute_marker_loss_1(ts)
             contact_model.compute_marker_loss_2()
             
-            # Get keypoint coordinates for visualization
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(ts, keypoint_indices)
+            keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
 
         contact_model.loss.grad[None] = 1.0
         
+        print('backward')
         for ts in range(num_frames - 2, -1, -1):
             contact_model.compute_marker_loss_2.grad()
             contact_model.compute_marker_loss_1.grad(ts)
@@ -470,9 +468,9 @@ def main():
                 for ss in range(num_sub_frames - 1):
                     contact_model.update(ss)
             
-            # Get keypoint coordinates for visualization in backward pass
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(ts, keypoint_indices)
-            update_gui(contact_model, gui_tuple, num_frames, ts, (0, 0, 0), keypoint_coords)
+            keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
+            update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
         
         print(f"Accumulated gradients after optimisation step {opts}:")
         print(f"kn grad: {contact_model.kn.grad[None]}")
