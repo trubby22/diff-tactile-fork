@@ -238,11 +238,6 @@ class Contact(ContactVisualisation):
                 self.p_sensor1[j] = ti.Vector([self.v[i][0], self.v[i][1], self.v[i][2]], dt=ti.f32)
                 self.o_sensor1[j] = ti.Vector([self.v[i][3], self.v[i][4], self.v[i][5]], dt=ti.f32)
 
-    @ti.kernel
-    def set_pos_control(self, f: ti.i32):
-        self.fem_sensor1.d_pos_global[None] = self.p_sensor1[f]
-        self.fem_sensor1.d_ori_global[None] = self.o_sensor1[f]
-
     def set_pos_control_maybe_print(self, f: int):
         if False:
             print("\nInput position vector (p_sensor1):")
@@ -252,7 +247,7 @@ class Contact(ContactVisualisation):
             print("\nSet position vector (d_pos):")
             print(self.fem_sensor1.d_pos_global[None].to_numpy())
             print("\nSet orientation vector (d_ori):")
-            print(self.fem_sensor1.d_ori_global[None].to_numpy())
+            print(self.fem_sensor1.d_ori_global_euler_angles[None].to_numpy())
             print()
 
     def update(self, f):
@@ -519,7 +514,7 @@ class Contact(ContactVisualisation):
         # If dwelling, set control outputs to zero to maintain position
         if self.is_dwelling[None]:
             self.fem_sensor1.d_pos_global[None] = ti.Vector([0.0, 0.0, 0.0])
-            self.fem_sensor1.d_ori_global[None] = ti.Vector([0.0, 0.0, 0.0, 0.0])
+            self.fem_sensor1.d_ori_global_quaternion[None] = ti.Vector([0.0, 0.0, 0.0, 1.0])
             return
         
         # Update error sums for integral term
@@ -540,7 +535,7 @@ class Contact(ContactVisualisation):
         
         # Set control outputs
         self.fem_sensor1.d_pos_global[None] = pos_control
-        self.fem_sensor1.d_ori_global[None] = ori_control
+        self.fem_sensor1.d_ori_global_quaternion[None] = ori_control
 
 
 def main():
@@ -588,6 +583,9 @@ def main():
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(0, contact_model.keypoint_indices)
             keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
+
+            if ts in set([0, 10, 100]):
+                np.savetxt(f'output/tactile_sensor.pos.time_step.{ts}.csv', contact_model.fem_sensor1.pos.to_numpy()[0], delimiter=",", fmt='%.2f')
             
         contact_model.loss.grad[None] = 1.0
         
