@@ -139,9 +139,9 @@ class Contact(ContactVisualisation):
         self.pid_controller_kp = ti.field(dtype=float, shape=(), needs_grad=True)  # Proportional gain
         self.pid_controller_ki = ti.field(dtype=float, shape=(), needs_grad=True)  # Integral gain
         self.pid_controller_kd = ti.field(dtype=float, shape=(), needs_grad=True)  # Derivative gain
-        self.pid_controller_kp[None] = 10.0  # Initial values - these may need tuning
-        self.pid_controller_ki[None] = 1.0
-        self.pid_controller_kd[None] = 1.0
+        self.pid_controller_kp[None] = 20.0  # Initial values - these may need tuning
+        self.pid_controller_ki[None] = 0.0
+        self.pid_controller_kd[None] = 0.0
         
         # Error accumulation for integral term
         self.pos_error_sum = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)
@@ -153,25 +153,25 @@ class Contact(ContactVisualisation):
 
         # Target positions now use Euler angles (in degrees) instead of quaternions
         target_positions_npy = np.array([
-            # [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            # [12.5+5, 11.5, 3.00625+50, -90, 0, 0],
+            [12.5, 11.5, 3.00625, -90, 0, 0],
 
-            # [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            # [12.5, 11.5+5, 3.00625+50, -90, 0, 0],
+            # press-slide
+            [12.5, 11.5, 3.00625-1, -90, 0, 0],
+            [12.5+1, 11.5, 3.00625-1, -90, 0, 0],
+            [12.5, 11.5, 3.00625-1, -90, 0, 0],
+            [12.5, 11.5, 3.00625, -90, 0, 0],
 
-            # [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            # [12.5, 11.5, 3.00625+50+5, -90, 0, 0],
+            # press-twist-x
+            [12.5, 11.5, 3.00625-1, -90, 0, 0],
+            [12.5, 11.5, 3.00625-1, -90+20, 0, 0],
+            [12.5, 11.5, 3.00625-1, -90, 0, 0],
+            [12.5, 11.5, 3.00625, -90, 0, 0],
 
-            [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            [12.5, 11.5, 3.00625+50, -90+45, 0, 0],
-
-            [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            [12.5, 11.5, 3.00625+50, -90, 45, 0],
-
-            [12.5, 11.5, 3.00625+50, -90, 0, 0],
-            [12.5, 11.5, 3.00625+50, -90, 0, 45],
-
-            [12.5, 11.5, 3.00625+50, -90, 0, 0],
+            # press-twist-z
+            [12.5, 11.5, 3.00625-1, -90, 0, 0],
+            [12.5, 11.5, 3.00625-1, -90, 0, 20],
+            [12.5, 11.5, 3.00625-1, -90, 0, 0],
+            [12.5, 11.5, 3.00625, -90, 0, 0],
         ], dtype=float)
         self.target_positions = ti.Vector.field(6, dtype=float, shape=target_positions_npy.shape[0], needs_grad=False)  # Changed from 7 to 6
         self.target_positions.from_numpy(target_positions_npy)
@@ -186,7 +186,7 @@ class Contact(ContactVisualisation):
         
         # Add fields for dwell time control
         self.dwell_frames = ti.field(dtype=int, shape=(), needs_grad=False)
-        self.dwell_frames[None] = 50  # Number of frames to stay at each target
+        self.dwell_frames[None] = 0  # Number of frames to stay at each target
         self.dwell_counter = ti.field(dtype=int, shape=(), needs_grad=False)
         self.dwell_counter[None] = 0
         self.is_dwelling = ti.field(dtype=bool, shape=(), needs_grad=False)
@@ -196,7 +196,7 @@ class Contact(ContactVisualisation):
 
     def set_up_initial_positions(self):
         phantom_pose = [12.5, 11.5, 2.05625, 0, 0, 0]
-        tactile_sensor_pose = [12.5, 11.5, 3.00625+50, -90, 0, 0]
+        tactile_sensor_pose = [12.5, 11.5, 3.00625, -90, 0, 0]
         
         self.mpm_object.init(
             pos=phantom_pose[:3],
@@ -583,7 +583,7 @@ def main():
 
     phantom_name = "suturing-phantom.stl"
     num_sub_frames = 50
-    num_frames = 600
+    num_frames = 700
     num_opt_steps = 20
     dt = 5e-5
     contact_model = Contact(
