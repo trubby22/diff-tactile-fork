@@ -22,7 +22,7 @@ class FEMDomeSensor:
         np.set_printoptions(precision=3, floatmode='maxprec', suppress=False)
         self.sub_steps = sub_steps
         self.dt = dt
-        self.N_node = 200 # number of nodes in the most inner layer
+        self.N_node = 1_000 # number of nodes in the most inner layer
         self.N_t = 4 # thickness
         self.t_res = 0.2 # [cm]; inter-layer distance
         self.inner_radius = 2.7 # [cm]
@@ -54,7 +54,7 @@ class FEMDomeSensor:
         self.init_x.from_numpy(self.all_nodes.astype(np.float32))
         self.layer_id = ti.field(int, self.n_verts) # indicate layers
         self.layer_id.from_numpy(self.layer_idxs.astype(np.int32))
-        self.surface_id_np = np.where(self.layer_idxs==(self.N_t-1))[0]
+        self.surface_id_np = np.where(self.layer_idxs==0)[0]
 
         self.surface_id = ti.field(int, len(self.surface_id_np))
         self.surface_id.from_numpy(self.surface_id_np.astype(np.int32))
@@ -63,7 +63,7 @@ class FEMDomeSensor:
         self.surface_cam_virtual_loc = ti.Vector.field(2, float, self.num_surface, needs_grad=True)
 
         # cam model
-        self.num_k_closest = 1
+        self.num_k_closest = 5
         self.initial_markers, interp_idx, interp_weight = self.init_cam_model(init_img_path)
         self.num_markers = len(self.initial_markers)
         self.visualise_2d(interp_idx)
@@ -178,9 +178,21 @@ class FEMDomeSensor:
         else:
             init_img = cv2.imread(init_img_path)
         initial_markers = get_marker_image(init_img)
+        # Overlay initial_markers on the image and save
+        overlay_img = init_img.copy()
+        for pos in initial_markers:
+            center = (int(round(pos[0])), int(round(pos[1])))
+            cv2.circle(overlay_img, center, radius=5, color=(0, 0, 255), thickness=2)  # Red circle
+        cv2.imwrite("../tasks/output/init_cam_model.png", overlay_img)
         surface_nodes = self.all_nodes[self.surface_id_np]
         cam_3D_nodes = np.array([surface_nodes[:,0], surface_nodes[:,2], surface_nodes[:,1]]).T
         cam_points = project_points_to_pix(cam_3D_nodes)
+        # Overlay cam_points as green circles and save
+        cam_points_img = init_img.copy()
+        for pt in cam_points:
+            center = (int(round(pt[0])), int(round(pt[1])))
+            cv2.circle(cam_points_img, center, radius=3, color=(0, 255, 0), thickness=2)  # Green circle
+        cv2.imwrite("../tasks/output/cam_points.png", cam_points_img)
         # interpolated markers in 2d & 3d
         interp_idx = []
         interp_weight = []
@@ -404,8 +416,8 @@ class FEMDomeSensor:
         phi = np.pi * (np.sqrt(5.0) - 1.0)  # golden angle in radians
         idx = np.arange(samples).astype(float)
         upper_z = 1.0
-        lower_z = (0.6 / scale)
-        y = upper_z - (idx / (samples - 1)) * lower_z
+        lower_z = upper_z - 0.6 / scale
+        y = lower_z + (idx / (samples - 1)) * (upper_z - lower_z)
         radius = np.sqrt(1 - y * y)
         theta = phi * idx
         x = np.cos(theta) * radius
@@ -426,7 +438,7 @@ class FEMDomeSensor:
         # y goes from (scale - 0.6 - 1.0) to (scale - 0.6)
         upper_z = (scale - 0.6) / scale
         lower_z = (scale - 0.6 - 1.0) / scale
-        y = upper_z - (idx / (samples - 1)) * lower_z
+        y = lower_z + (idx / (samples - 1)) * (upper_z - lower_z)
         theta = phi * idx
         x = 0.5 * np.cos(theta)
         z = 0.5 * np.sin(theta)
@@ -447,9 +459,7 @@ class FEMDomeSensor:
             ratio = (rad**2) / (self.inner_radius**2)
             n_node = int(self.N_node * ratio)
             # print(f'i: {i}; rad: {rad}; ratio: {ratio}; n_node: {n_node}')
-            layer_nodes_1 = self.fibonacci_sphere(samples=n_node // 2, scale = rad)
-            layer_nodes_2 = self.generate_cylinder_lateral_surface(samples=n_node // 2 + (n_node % 2), scale = rad)
-            layer_nodes = np.concatenate([layer_nodes_1, layer_nodes_2], axis=0)
+            layer_nodes = self.fibonacci_sphere(samples=n_node, scale = rad)
             # with open(f"output/tactile_sensor.layer_nodes_{i}.pkl", 'wb') as f:
             #     pickle.dump(np.array(layer_nodes), f)
             # np.savetxt(f'output/tactile_sensor.layer_nodes_{i}.csv', np.array(layer_nodes), delimiter=",", fmt='%.2f')
@@ -469,9 +479,10 @@ class FEMDomeSensor:
         # Find point A with maximum y-value
         point_a_idx = np.argmax(all_nodes[:, 1])
         point_a = all_nodes[point_a_idx]
-        # Subtract point A's coordinates from all points
-        if False:
-            all_nodes -= point_a
+        # Translate so that y-coordinate of point A becomes 2.4
+        delta_y = 2.4 - point_a[1]
+        translation_vec = np.array([0, delta_y, 0])
+        all_nodes += translation_vec
         triangle_nodes = np.array([all_nodes[:,0], layer_height, all_nodes[:,2]]).T
         all_f2v = Delaunay(triangle_nodes).simplices # M * 4 (tetrahedrons)
         layer_idxs = np.concatenate(layer_idxs,axis=0) # N

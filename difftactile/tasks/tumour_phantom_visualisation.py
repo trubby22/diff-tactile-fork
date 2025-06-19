@@ -50,12 +50,14 @@ class ContactVisualisation:
     def draw_markers(self, init_markers, cur_markers, gui):
         img_height = 480
         img_width = 640
-        scale = img_width
-        rescale = 1.8
-        draw_points = rescale * (
-            init_markers - [img_width // 2, img_height // 2]
-        ) / scale + [0.5, 0.5]
-        offset = rescale * (cur_markers - init_markers) / scale
+        # Scale x by img_width and y by img_height
+        draw_points = init_markers.copy()
+        draw_points[:, 0] = draw_points[:, 0] / img_width
+        draw_points[:, 1] = draw_points[:, 1] / img_height
+        offset = cur_markers.copy()
+        offset[:, 0] = offset[:, 0] / img_width
+        offset[:, 1] = offset[:, 1] / img_height
+        offset = offset - draw_points
         if not off_screen:
             gui.circles(draw_points, radius=2, color=0xF542A1)
             gui.arrows(draw_points, 10.0 * offset, radius=2, color=0xE6C949)

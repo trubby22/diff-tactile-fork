@@ -24,6 +24,8 @@ with open(f'output/fem_sensor.surface_id_np.pkl', 'rb') as f:
 
 surface_nodes = points[surface_id_np]
 marker_nodes = surface_nodes[interp_idx_flat]
+marker_nodes[:, 1] = 1.0
+surface_nodes[:, 1] = 2.0
 # Print mean values along each axis
 print(f'Mean values of marker_nodes:')
 print(f'X-axis mean: {np.mean(marker_nodes[:, 0]):.4f}')
@@ -31,13 +33,13 @@ print(f'Y-axis mean: {np.mean(marker_nodes[:, 1]):.4f}')
 print(f'Z-axis mean: {np.mean(marker_nodes[:, 2]):.4f}')
 # all_nodes[surface_id_np][np.unique(interp_idx_flat)]
 
-if False:
+if True:
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
-    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=3.3, origin=[0, 0, 0])
+    pcd.points = o3d.utility.Vector3dVector(np.concatenate([surface_nodes, marker_nodes]))
+    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2.4-0.6, origin=[0, 0, 0])
     o3d.visualization.draw_geometries([pcd, axes])
 
-if True:
+if False:
     with open(f'output/tactile_sensor.all_f2v.pkl', 'rb') as f:
         tetrahedra_indices = pickle.load(f)
     tetrahedra_indices = tetrahedra_indices.astype(int)
