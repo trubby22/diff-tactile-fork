@@ -186,6 +186,9 @@ class FEMDomeSensor:
         cv2.imwrite("../tasks/output/init_cam_model.png", overlay_img)
         surface_nodes = self.all_nodes[self.surface_id_np]
         cam_3D_nodes = np.array([surface_nodes[:,0], surface_nodes[:,2], surface_nodes[:,1]]).T
+        with open(f"output/fem_sensor.cam_3d_nodes.pkl", 'wb') as f:
+            pickle.dump(cam_3D_nodes, f)
+        np.savetxt(f'output/fem_sensor.cam_3d_nodes.csv', cam_3D_nodes, delimiter=",", fmt='%.2f')
         cam_points = project_points_to_pix(cam_3D_nodes)
         # Overlay cam_points as green circles and save
         cam_points_img = init_img.copy()

@@ -30,14 +30,9 @@ def project_3d_2d(a, fx=106.31, fy=141.08, cx=321.79, cy=245.32):
 
     return p
 
-def project_points_to_pix(
-    a, 
-    fx=106.31, fy=141.08, cx=321.79, cy=245.32, 
-    k1=-1.95236602e+00, k2=-6.13646905e+02, k3=1.07119471e+04, k4=-4.88599321e+04,
-    skew=-2.26284456
-):
-    # a is a point cloud if (n, 3)
-    a = a.copy()
+def project_points_to_pix(a, fx=106.31, fy=141.08, cx=321.79, cy=245.32):
+    #ref. Universal Semantic Segmentation for Fisheye Urban Driving Images Ye et al.
+    #a is a point cloud if (n, 3)
     a[:,2] += 2.0*0.01 #(14-0.7-9)* 0.01 # distance to the image plane
     b = np.array([[0., 0., 1.]]).repeat(len(a), axis=0)
     inner_product = (a * b).sum(axis=1)
@@ -48,25 +43,11 @@ def project_points_to_pix(
     theta = np.arccos(cos)
     omega = np.arctan2(a[:,1],a[:,0]) + np.pi
 
-    # Fisheye distortion (OpenCV model)
-    theta2 = theta * theta
-    theta3 = theta2 * theta
-    theta5 = theta3 * theta2
-    theta7 = theta5 * theta2
-    theta9 = theta7 * theta2
-    theta_d = (
-        theta
-        + k1 * theta3
-        + k2 * theta5
-        + k3 * theta7
-        + k4 * theta9
-    )
-
-    r_x = fx * theta_d
-    r_y = fy * theta_d
+    r_x = fx * theta
+    r_y = fy * theta
 
     p = np.zeros((len(a),2))
-    p[:,0] = r_x * np.cos(omega) + skew * (r_y * np.sin(omega)) + cx
+    p[:,0] = r_x * np.cos(omega) + cx
     p[:,1] = r_y * np.sin(omega) + cy
 
     return p
@@ -92,6 +73,36 @@ def get_marker_image(img):
     MarkerCenter = np.array(MarkerCenter)
 
     return MarkerCenter
+
+def project_points_to_pix_cv2(points3d, K=None, D=None, rvec=None, tvec=None):
+    """
+    Project 3D points to 2D image coordinates using cv2.fisheye.projectPoints.
+    Args:
+        points3d: (num_points, 3) or (3,) array-like, the 3D points in camera coordinates.
+        K: (3,3) camera intrinsic matrix. If None, uses default fx, fy, cx, cy.
+        D: (4,) distortion coefficients. If None, uses default values.
+        rvec: (3,1) rotation vector. If None, assumes zero rotation.
+        tvec: (3,1) translation vector. If None, assumes zero translation.
+    Returns:
+        points2d: (num_points, 2) numpy array, the projected 2D points on the image plane.
+    """
+    points3d = np.asarray(points3d, dtype=np.float64)
+    if points3d.ndim == 1:
+        points3d = points3d.reshape(1, 3)
+    points3d = points3d.reshape(-1, 1, 3)
+    if K is None:
+        fx, fy, cx, cy = 106.31, 141.08, 321.79, 245.32
+        K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
+    if D is None:
+        # D = np.zeros((4, 1), dtype=np.float64)  # Use zero distortion as default for fisheye
+        D = np.array([-1.95236602e+00, -6.13646905e+02, 1.07119471e+04, -4.88599321e+04], dtype=np.float64)
+    if rvec is None:
+        rvec = np.zeros((3, 1), dtype=np.float64)
+    if tvec is None:
+        tvec = np.zeros((3, 1), dtype=np.float64)
+    imgpts, _ = cv2.fisheye.projectPoints(points3d, rvec, tvec, K, D)
+    res = imgpts.reshape(-1, 2)
+    return res
 
 if __name__ == '__main__':
     img = cv2.imread("./system-id-screws-3-reps-0001.png")

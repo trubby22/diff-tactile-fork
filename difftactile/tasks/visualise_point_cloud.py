@@ -9,6 +9,9 @@ with open(f'output/tactile_sensor.all_nodes.pkl', 'rb') as f:
 with open(f'output/fem_sensor.interp_idx_flat.pkl', 'rb') as f:
     interp_idx_flat = pickle.load(f)
 
+with open(f'output/fem_sensor.cam_3d_nodes.pkl', 'rb') as f:
+    cam_3d_nodes = pickle.load(f)
+
 if False:
     counter = Counter(interp_idx_flat)
     for elem, count in counter.most_common():
@@ -35,8 +38,8 @@ print(f'Z-axis mean: {np.mean(marker_nodes[:, 2]):.4f}')
 
 if True:
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(np.concatenate([surface_nodes, marker_nodes]))
-    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2.4-0.6, origin=[0, 0, 0])
+    pcd.points = o3d.utility.Vector3dVector(cam_3d_nodes)
+    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2.7, origin=[0, 0, 0])
     o3d.visualization.draw_geometries([pcd, axes])
 
 if False:
