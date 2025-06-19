@@ -76,7 +76,7 @@ class FEMDomeSensor:
         self.interp_idx = ti.Vector.field(self.num_k_closest, int, self.num_markers)
         self.interp_idx.from_numpy(interp_idx.astype(np.int32))
 
-        self.f2v = ti.Vector.field(4, int, self.n_cells)  # ids of three vertices of each face
+        self.f2v = ti.Vector.field(4, int, self.n_cells)
         self.f2v.from_numpy(self.all_f2v.astype(np.int32))
         self.contact_seg = ti.Vector.field(3, int, self.num_triangles) # surface triangle mesh
         self.contact_seg.from_numpy(self.surface_f2v.astype(np.int32))
@@ -579,13 +579,6 @@ class FEMDomeSensor:
             D_i = ti.Matrix.cols([a - d, b - d, c - d])
             V_i = ti.abs(D_i.determinant()) / 6
             F_i = D_i @ self.B[i]
-
-            # ## original version
-            # F_T = F_i.inverse().transpose()
-            # J = F_i.determinant()
-            # J = ti.max(0.2, F_i.determinant())
-            # log_J_i = ti.log(J)
-            # stress = self.mu[None] * (F_i -  F_T) + self.lam[None] * log_J_i * F_T
 
             ## stable neo-hooken
             J = F_i.determinant()
