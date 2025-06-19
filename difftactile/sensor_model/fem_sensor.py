@@ -403,13 +403,35 @@ class FEMDomeSensor:
         # sample points evenly on a hemisphere
         phi = np.pi * (np.sqrt(5.0) - 1.0)  # golden angle in radians
         idx = np.arange(samples).astype(float)
-        y = 1 - (idx / (samples - 1)) #* 2 for sphere
+        upper_z = 1.0
+        lower_z = (0.6 / scale)
+        y = upper_z - (idx / (samples - 1)) * lower_z
         radius = np.sqrt(1 - y * y)
         theta = phi * idx
         x = np.cos(theta) * radius
         z = np.sin(theta) * radius
 
         points = scale * np.vstack((x,y,z)).T
+
+        return points
+
+    def generate_cylinder_lateral_surface(self, samples=100, scale=1.0):
+        """
+        Generate evenly distributed points on the lateral surface of a cylinder using the Fibonacci method.
+        The cylinder is centered at the origin, aligned along the y-axis, with height from -0.5 to 0.5 (before scaling).
+        The radius is 0.5 (before scaling).
+        """
+        phi = np.pi * (np.sqrt(5.0) - 1.0)  # golden angle in radians
+        idx = np.arange(samples).astype(float)
+        # y goes from (scale - 0.6 - 1.0) to (scale - 0.6)
+        upper_z = (scale - 0.6) / scale
+        lower_z = (scale - 0.6 - 1.0) / scale
+        y = upper_z - (idx / (samples - 1)) * lower_z
+        theta = phi * idx
+        x = 0.5 * np.cos(theta)
+        z = 0.5 * np.sin(theta)
+
+        points = scale * np.vstack((x, y, z)).T
         return points
 
     def init_mesh(self):
@@ -425,7 +447,9 @@ class FEMDomeSensor:
             ratio = (rad**2) / (self.inner_radius**2)
             n_node = int(self.N_node * ratio)
             # print(f'i: {i}; rad: {rad}; ratio: {ratio}; n_node: {n_node}')
-            layer_nodes = self.fibonacci_sphere(samples=n_node, scale = rad)
+            layer_nodes_1 = self.fibonacci_sphere(samples=n_node // 2, scale = rad)
+            layer_nodes_2 = self.generate_cylinder_lateral_surface(samples=n_node // 2 + (n_node % 2), scale = rad)
+            layer_nodes = np.concatenate([layer_nodes_1, layer_nodes_2], axis=0)
             # with open(f"output/tactile_sensor.layer_nodes_{i}.pkl", 'wb') as f:
             #     pickle.dump(np.array(layer_nodes), f)
             # np.savetxt(f'output/tactile_sensor.layer_nodes_{i}.csv', np.array(layer_nodes), delimiter=",", fmt='%.2f')

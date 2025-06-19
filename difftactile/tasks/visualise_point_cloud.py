@@ -33,7 +33,7 @@ print(f'Z-axis mean: {np.mean(marker_nodes[:, 2]):.4f}')
 
 if True:
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(marker_nodes)
+    pcd.points = o3d.utility.Vector3dVector(points)
     axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=3.3, origin=[0, 0, 0])
     o3d.visualization.draw_geometries([pcd, axes])
 
