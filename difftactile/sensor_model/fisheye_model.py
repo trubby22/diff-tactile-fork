@@ -10,7 +10,7 @@ import math
 import taichi as ti
 
 @ti.func
-def project_3d_2d(a, f=8.627e-04, m=173913.04, cx=359.0, cy=266.0):
+def project_3d_2d(a, fx=106.31, fy=141.08, cx=321.79, cy=245.32):
     #ref. Universal Semantic Segmentation for Fisheye Urban Driving Images Ye et al.
     #a is 3d vec
     a[2] += 2.0*0.01 # distance to the image plane
@@ -21,15 +21,16 @@ def project_3d_2d(a, f=8.627e-04, m=173913.04, cx=359.0, cy=266.0):
     cos = ti.max(-1.0, cos)
     theta = ti.acos(cos)
     omega = ti.atan2(a[1],a[0]+1e-8) + ti.math.pi
-    r = m * f * theta
+    r_x = fx * theta
+    r_y = fy * theta
 
     p = ti.Vector([0.0, 0.0])
-    p[0] = r * ti.cos(omega) + cx
-    p[1] = r * ti.sin(omega) + cy
+    p[0] = r_x * ti.cos(omega) + cx
+    p[1] = r_y * ti.sin(omega) + cy
 
     return p
 
-def project_points_to_pix(a, f=8.627e-04, m=173913.04, cx=359.0, cy=266.0):
+def project_points_to_pix(a, fx=106.31, fy=141.08, cx=321.79, cy=245.32):
     #ref. Universal Semantic Segmentation for Fisheye Urban Driving Images Ye et al.
     #a is a point cloud if (n, 3)
     a[:,2] += 2.0*0.01 #(14-0.7-9)* 0.01 # distance to the image plane
@@ -42,11 +43,12 @@ def project_points_to_pix(a, f=8.627e-04, m=173913.04, cx=359.0, cy=266.0):
     theta = np.arccos(cos)
     omega = np.arctan2(a[:,1],a[:,0]) + np.pi
 
-    r = m * f * theta
+    r_x = fx * theta
+    r_y = fy * theta
 
     p = np.zeros((len(a),2))
-    p[:,0] = r * np.cos(omega) + cx
-    p[:,1] = r * np.sin(omega) + cy
+    p[:,0] = r_x * np.cos(omega) + cx
+    p[:,1] = r_y * np.sin(omega) + cy
 
     return p
 
