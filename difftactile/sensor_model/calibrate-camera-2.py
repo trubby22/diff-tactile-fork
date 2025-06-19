@@ -9,15 +9,18 @@ D = params["D"]
 
 # Print the contents
 print("K (Intrinsic Matrix):\n", params["K"])
-print("D (Distortion Coefficients):\n", params["D"])
+print("D (Distortion Coefficients):\n", params["D"].flatten())
 
 fx = K[0,0]
 fy = K[1,1]
 cx = K[0,2]
 cy = K[1,2]
+s = K[0,1]
 
 print(f"Focal Length (fx, fy): {fx:.2f}, {fy:.2f}")
 print(f"Principal Point (cx, cy): {cx:.2f}, {cy:.2f}")
+print(f"Principal Point (cx, cy): {cx:.2f}, {cy:.2f}")
+print(f"Skew (s): {s:.2f}")
 
 # Function to scale intrinsic parameters to a new resolution
 def scale_resolution(fx, fy, cx, cy, orig_width, orig_height, new_width, new_height):

@@ -30,9 +30,14 @@ def project_3d_2d(a, fx=106.31, fy=141.08, cx=321.79, cy=245.32):
 
     return p
 
-def project_points_to_pix(a, fx=106.31, fy=141.08, cx=321.79, cy=245.32):
-    #ref. Universal Semantic Segmentation for Fisheye Urban Driving Images Ye et al.
-    #a is a point cloud if (n, 3)
+def project_points_to_pix(
+    a, 
+    fx=106.31, fy=141.08, cx=321.79, cy=245.32, 
+    k1=-1.95236602e+00, k2=-6.13646905e+02, k3=1.07119471e+04, k4=-4.88599321e+04,
+    skew=-2.26284456
+):
+    # a is a point cloud if (n, 3)
+    a = a.copy()
     a[:,2] += 2.0*0.01 #(14-0.7-9)* 0.01 # distance to the image plane
     b = np.array([[0., 0., 1.]]).repeat(len(a), axis=0)
     inner_product = (a * b).sum(axis=1)
@@ -43,11 +48,25 @@ def project_points_to_pix(a, fx=106.31, fy=141.08, cx=321.79, cy=245.32):
     theta = np.arccos(cos)
     omega = np.arctan2(a[:,1],a[:,0]) + np.pi
 
-    r_x = fx * theta
-    r_y = fy * theta
+    # Fisheye distortion (OpenCV model)
+    theta2 = theta * theta
+    theta3 = theta2 * theta
+    theta5 = theta3 * theta2
+    theta7 = theta5 * theta2
+    theta9 = theta7 * theta2
+    theta_d = (
+        theta
+        + k1 * theta3
+        + k2 * theta5
+        + k3 * theta7
+        + k4 * theta9
+    )
+
+    r_x = fx * theta_d
+    r_y = fy * theta_d
 
     p = np.zeros((len(a),2))
-    p[:,0] = r_x * np.cos(omega) + cx
+    p[:,0] = r_x * np.cos(omega) + skew * (r_y * np.sin(omega)) + cx
     p[:,1] = r_y * np.sin(omega) + cy
 
     return p
