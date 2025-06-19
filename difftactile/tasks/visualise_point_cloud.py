@@ -24,6 +24,12 @@ with open(f'output/fem_sensor.surface_id_np.pkl', 'rb') as f:
 
 surface_nodes = points[surface_id_np]
 marker_nodes = surface_nodes[interp_idx_flat]
+# Print mean values along each axis
+print(f'Mean values of marker_nodes:')
+print(f'X-axis mean: {np.mean(marker_nodes[:, 0]):.4f}')
+print(f'Y-axis mean: {np.mean(marker_nodes[:, 1]):.4f}')
+print(f'Z-axis mean: {np.mean(marker_nodes[:, 2]):.4f}')
+# all_nodes[surface_id_np][np.unique(interp_idx_flat)]
 
 if True:
     pcd = o3d.geometry.PointCloud()

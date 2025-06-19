@@ -10,3 +10,4 @@ lr_*/
 *.pkl
 sandbox.ipynb
 *.csv
+output/

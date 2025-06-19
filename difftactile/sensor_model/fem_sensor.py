@@ -66,6 +66,7 @@ class FEMDomeSensor:
         self.num_k_closest = 1
         self.initial_markers, interp_idx, interp_weight = self.init_cam_model(init_img_path)
         self.num_markers = len(self.initial_markers)
+        self.visualise_2d(interp_idx)
 
         self.predict_markers = ti.Vector.field(2, float, self.num_markers, needs_grad = True)
         self.virtual_markers = ti.Vector.field(2, float, self.num_markers, needs_grad=True)
@@ -210,6 +211,29 @@ class FEMDomeSensor:
         np.savetxt('output/fem_sensor.surface_id_np.csv', self.surface_id_np, delimiter=",", fmt='%d')
 
         return surf_2d, interp_idx, interp_weight
+
+    def visualise_2d(self, interp_idx):
+        """
+        Project selected 3D marker points to the image plane and overlay them as red dots on './init.png'.
+        Save the result as 'output/init-3d-markers.png'.
+        """
+        # Get the relevant 3D marker points
+        marker_indices = np.unique(interp_idx.flatten())
+        marker_points_3d = self.all_nodes[self.surface_id_np][marker_indices]
+        # Reorder axes to match camera convention
+        cam_3D_nodes = np.array([marker_points_3d[:,0], marker_points_3d[:,2], marker_points_3d[:,1]]).T
+        # Project to 2D
+        marker_points_2d = project_points_to_pix(cam_3D_nodes)
+
+        # Load the image
+        img = cv2.imread('./init.png')
+        if img is None:
+            print('Error: Could not load ./init.png')
+            return
+        for pt in marker_points_2d:
+            x, y = int(round(pt[0])), int(round(pt[1]))
+            cv2.circle(img, (x, y), 4, (0,0,255), -1)  # Red dot
+        cv2.imwrite('output/init-3d-markers.png', img)
 
     @ti.kernel
     def extract_markers(self, f:ti.i32):

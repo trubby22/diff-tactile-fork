@@ -10,7 +10,7 @@ import math
 import taichi as ti
 
 @ti.func
-def project_3d_2d(a, f=8.627e-04, m=173913.04, cx=3.320e+02, cy=2.400e+02):
+def project_3d_2d(a, f=8.627e-04, m=173913.04, cx=359.0, cy=266.0):
     #ref. Universal Semantic Segmentation for Fisheye Urban Driving Images Ye et al.
     #a is 3d vec
     a[2] += 2.0*0.01 # distance to the image plane
@@ -29,7 +29,7 @@ def project_3d_2d(a, f=8.627e-04, m=173913.04, cx=3.320e+02, cy=2.400e+02):
 
     return p
 
-def project_points_to_pix(a, f=8.627e-04, m=173913.04, cx=3.320e+02, cy=2.400e+02):
+def project_points_to_pix(a, f=8.627e-04, m=173913.04, cx=359.0, cy=266.0):
     #ref. Universal Semantic Segmentation for Fisheye Urban Driving Images Ye et al.
     #a is a point cloud if (n, 3)
     a[:,2] += 2.0*0.01 #(14-0.7-9)* 0.01 # distance to the image plane
