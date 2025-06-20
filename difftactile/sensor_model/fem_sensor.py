@@ -22,7 +22,7 @@ class FEMDomeSensor:
         np.set_printoptions(precision=3, floatmode='maxprec', suppress=False)
         self.sub_steps = sub_steps
         self.dt = dt
-        self.N_node = 1_000 # number of nodes in the most inner layer
+        self.N_node = 100 # number of nodes in the most inner layer
         self.N_t = 4 # thickness
         self.t_res = 0.2 # [cm]; inter-layer distance
         self.inner_radius = 2.7 # [cm]

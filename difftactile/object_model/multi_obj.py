@@ -89,15 +89,31 @@ class MultiObj:
         self.group_cardinality = ti.field(dtype=int, shape=(2,), needs_grad=False)
         self.first_init_done = ti.field(dtype=bool, shape=(), needs_grad=False)
         
+    def set_tumour_cylinder(self, cx=0.0, cy=0.0, cz=0.0, theta=90, h=4.0, r=1.0):
+        self.cylinder_cx = cx
+        self.cylinder_cy = cy
+        self.cylinder_cz = cz
+        self.cylinder_theta = np.deg2rad(theta)  # convert degrees to radians
+        self.cylinder_h = h
+        self.cylinder_r = r
 
     @ti.kernel
     def preprocess_obj(self):
         for item in range(self.n_particles):
             pos = self.particles[item]
-            dist_squared = pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]
-            tumour_diameter = 1.0
-            tumour_radius = tumour_diameter / 2.0
-            if dist_squared <= tumour_radius * tumour_radius:
+            # Translate to cylinder center
+            px = pos[0] - self.cylinder_cx
+            py = pos[1] - self.cylinder_cy
+            pz = pos[2] - self.cylinder_cz
+            # Rotate by -theta about z-axis to align cylinder axis with x+
+            cost = ti.cos(-self.cylinder_theta)
+            sint = ti.sin(-self.cylinder_theta)
+            x_local = cost * px - sint * py
+            y_local = sint * px + cost * py
+            z_local = pz
+            # Check if within cylinder
+            half_h = self.cylinder_h / 2.0
+            if (ti.abs(x_local) <= half_h) and (y_local * y_local + z_local * z_local <= self.cylinder_r * self.cylinder_r):
                 self.titles[item] = 1
                 if not self.first_init_done[None]:
                     self.group_cardinality[1] += 1
@@ -107,6 +123,7 @@ class MultiObj:
                     self.group_cardinality[0] += 1
 
     def init(self, pos, ori, vel):
+        self.set_tumour_cylinder()
         self.preprocess_obj()
         if not self.first_init_done[None]:
             print(f'healthy: {self.group_cardinality[0]}, tumour: {self.group_cardinality[1]}')
