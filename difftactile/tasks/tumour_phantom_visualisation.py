@@ -36,6 +36,11 @@ class ContactVisualisation:
         )
 
     @ti.kernel
+    def reset_3d_scene(self):
+        self.healthy_tissue_points.fill(0)
+        self.tumour_points.fill(0)
+
+    @ti.kernel
     def draw_3d_scene(self, f: ti.i32):
         for p in range(self.mpm_object.n_particles):
             if self.mpm_object.titles[p] == 0:
@@ -167,7 +172,7 @@ class ContactVisualisation:
         self.draw_tableline[6] = c4
         self.draw_tableline[7] = c1
 
-def set_up_gui():
+def set_up_gui(phantom_initial_pose, tactile_sensor_initial_pose):
     if off_screen:
         return None
     else:
@@ -184,10 +189,11 @@ def set_up_gui():
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(14-50, 10.25, 3.60625)
-        camera.up(0, 0, 1)
-        camera.lookat(14, 10.25, 3.60625)
-        camera.fov(15)
+        x, y, z = tactile_sensor_initial_pose[:3]
+        camera.position(x, y, z+50)
+        camera.up(0, 1, 0)
+        camera.lookat(x, y, z)
+        camera.fov(10)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
         else:
@@ -276,12 +282,12 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, key_points_coords=None)
         scene.particles(
             contact_model.tumour_points,
             color=(1.0, 1.0, 0.0),
-            radius=0.05,
+            radius=0.02,
         )
         scene.particles(
             contact_model.sensor_points,
             color=(0.0, 1.0, 0.0),
-            radius=0.05,
+            radius=0.02,
         )
         
         if key_points_coords is not None:

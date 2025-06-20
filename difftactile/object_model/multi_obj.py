@@ -53,35 +53,41 @@ class MultiObj:
         self.eps = 1e-5
         self.damping = 35.0
 
-        self.E_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
-        self.nu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
-        self.lamda_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
-        self.mu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
+        self.E_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=False)
+        self.nu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=False)
+        self.lamda_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=False)
+        self.mu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=False)
 
         self.set_stiffness((5e3, 5e4))
 
-        self.x_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # position
-        self.v_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # velocity
+        self.x_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)  # position
+        self.v_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)  # velocity
 
-        self.C_0 = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # affine velocity field
-        self.F_new = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)
-        self.F_0 = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # deformation gradient
-        self.U_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)
-        self.V_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)
-        self.S_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)
+        self.C_0 = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)  # affine velocity field
+        self.F_new = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)
+        self.F_0 = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)  # deformation gradient
+        self.U_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)
+        self.V_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)
+        self.S_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)
 
-        self.grid_v_in = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node momentum/velocity
-        self.grid_v_out = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node momentum/velocity
-        self.grid_m = ti.field(dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node mass
-        self.grid_f = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node external force
+        self.grid_v_in = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=False)  # grid node momentum/velocity
+        self.grid_v_out = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=False)  # grid node momentum/velocity
+        self.grid_m = ti.field(dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=False)  # grid node mass
+        self.grid_f = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=False)  # grid node external force
         self.grid_occupy = ti.field(dtype=int, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid))
         self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad = True)
         
         self.cache = dict() # for grad backward
 
         self.group_cardinality = ti.field(dtype=int, shape=(2,), needs_grad=False)
-        self.first_init_done = ti.field(dtype=bool, shape=(), needs_grad=False)
-        
+
+        self.cylinder_cx = ti.field(dtype=float, shape=(), needs_grad=False)
+        self.cylinder_cy = ti.field(dtype=float, shape=(), needs_grad=False)
+        self.cylinder_cz = ti.field(dtype=float, shape=(), needs_grad=False)
+        self.cylinder_theta = ti.field(dtype=float, shape=(), needs_grad=False)
+        self.cylinder_h = ti.field(dtype=float, shape=(), needs_grad=False)
+        self.cylinder_r = ti.field(dtype=float, shape=(), needs_grad=False)
+
     def set_stiffness(self, stiffness_tuple):
         # Material A (normal tissue/fat)
         self.E_0[0], self.nu_0[0] = stiffness_tuple[0] * self.space_scale, 0.48  # Young's modulus ~5 kPa, nearly incompressible
@@ -92,57 +98,52 @@ class MultiObj:
             self.mu_0[item] = self.E_0[item] / 2 / (1 + self.nu_0[item])
             self.lamda_0[item] = self.E_0[item] * self.nu_0[item] / (1 + self.nu_0[item]) / (1 - 2 * self.nu_0[item])
     
-    def set_tumour_cylinder(self, cylinder_tuple=(0.0, 0.0, 0.0, 0.0, 17.5, 1.0)):
+    def set_tumour_cylinder(self, cylinder_tuple):
         cx, cy, cz, theta, h, r = cylinder_tuple
-        self.cylinder_cx = cx
-        self.cylinder_cy = cy
-        self.cylinder_cz = cz
-        self.cylinder_theta = np.deg2rad(theta)  # convert degrees to radians
-        self.cylinder_h = h
-        self.cylinder_r = r
+        self.cylinder_cx[None] = cx
+        self.cylinder_cy[None] = cy
+        self.cylinder_cz[None] = cz
+        self.cylinder_theta[None] = np.deg2rad(theta)
+        self.cylinder_h[None] = h
+        self.cylinder_r[None] = r
 
     @ti.kernel
     def preprocess_obj(self):
         for item in range(self.n_particles):
             pos = self.particles[item]
             # Translate to cylinder center
-            px = pos[0] - self.cylinder_cx
-            py = pos[1] - self.cylinder_cy
-            pz = pos[2] - self.cylinder_cz
+            px = pos[0] - self.cylinder_cx[None]
+            py = pos[1] - self.cylinder_cy[None]
+            pz = pos[2] - self.cylinder_cz[None]
             # Rotate by -theta about z-axis to align cylinder axis with x+
-            cost = ti.cos(-self.cylinder_theta)
-            sint = ti.sin(-self.cylinder_theta)
+            cost = ti.cos(-self.cylinder_theta[None])
+            sint = ti.sin(-self.cylinder_theta[None])
             x_local = cost * px - sint * py
             y_local = sint * px + cost * py
             z_local = pz
             # Check if within cylinder
-            half_h = self.cylinder_h / 2.0
-            if (ti.abs(x_local) <= half_h) and (y_local * y_local + z_local * z_local <= self.cylinder_r * self.cylinder_r):
+            half_h = self.cylinder_h[None] / 2.0
+            if (ti.abs(x_local) <= half_h) and (y_local * y_local + z_local * z_local <= self.cylinder_r[None] * self.cylinder_r[None]):
                 self.titles[item] = 1
-                if not self.first_init_done[None]:
-                    self.group_cardinality[1] += 1
+                self.group_cardinality[1] += 1
             else:
                 self.titles[item] = 0
-                if not self.first_init_done[None]:
-                    self.group_cardinality[0] += 1
+                self.group_cardinality[0] += 1
+
+    @ti.kernel
+    def reset_tumour(self):
+        self.titles.fill(0)
+        self.group_cardinality.fill(0)
 
     def init(self, pos, ori, vel, cylinder_tuple, stiffness_tuple, tumour_present):
         self.set_stiffness(stiffness_tuple)
+        self.reset_tumour()
         if tumour_present:
             self.set_tumour_cylinder(cylinder_tuple)
             self.preprocess_obj()
-        if not self.first_init_done[None]:
-            print(f'healthy: {self.group_cardinality[0]}, tumour: {self.group_cardinality[1]}')
-        np.savetxt('output/multi_obj.titles.csv', self.titles.to_numpy(), delimiter=",", fmt='%d')
-        np.savetxt('output/multi_obj.particles.csv', self.particles.to_numpy(), delimiter=",", fmt='%.4f')
-        axiz = 0
-        _min = np.min(self.particles.to_numpy(), axis=axiz)
-        _max = np.max(self.particles.to_numpy(), axis=axiz)
-        if False and not self.first_init_done[None]:
-            print(f'multi_obj min {_min} max {_max}')
+        print(f'healthy: {self.group_cardinality[0]}, tumour: {self.group_cardinality[1]}')
         self.set_object_params(pos, ori, vel)
         self.init_object()
-        self.first_init_done[None] = True
 
     def set_object_params(self, position, orientation, velocity):
         self.init_pos[None] = position
