@@ -8,7 +8,7 @@ import math
 
 off_screen = False
 enable_gui1 = False
-enable_gui2 = True
+enable_gui2 = False
 enable_gui3 = False
 
 class ContactVisualisation:
@@ -43,9 +43,8 @@ class ContactVisualisation:
             elif self.mpm_object.titles[p] == 1:
                 self.tumour_points[p] = self.mpm_object.x_0[f, p]
 
-        for p in range(self.fem_sensor1.num_surface):
-            idx = self.fem_sensor1.surface_id[p]
-            self.sensor_points[p] = self.fem_sensor1.pos[f, idx]
+        for p in range(self.fem_sensor1.n_verts):
+            self.sensor_points[p] = self.fem_sensor1.pos[f, p]
 
     def draw_markers(self, init_markers, cur_markers, gui):
         img_height = 480
@@ -179,16 +178,16 @@ def set_up_gui():
         window_width = screen_width // grid_cols
         window_height = screen_height // grid_rows
         window_res = (int(window_width * 0.75), int(window_height * 0.75))
-        window = ti.ui.Window("high-level camera", window_res)
+        window = ti.ui.Window("high-level camera", (int(screen_width * 0.8), screen_height // 2))
         canvas = window.get_canvas()
         canvas.set_background_color((0, 0, 0))
         scene = ti.ui.Scene()
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
-        camera.position(14, 10.25, 3.60625+50)
-        camera.up(0, 1, 0)
+        camera.position(14-50, 10.25, 3.60625)
+        camera.up(0, 0, 1)
         camera.lookat(14, 10.25, 3.60625)
-        camera.fov(25)
+        camera.fov(15)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
         else:

@@ -58,14 +58,7 @@ class MultiObj:
         self.lamda_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
         self.mu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
 
-        # Material A (normal tissue/fat)
-        self.E_0[0], self.nu_0[0] = 5e3 * self.space_scale, 0.48  # Young's modulus ~5 kPa, nearly incompressible
-        # Material B (tumor)
-        self.E_0[1], self.nu_0[1] = 50e3 * self.space_scale, 0.48  # Young's modulus ~50 kPa, nearly incompressible
-
-        for item in range(2):
-            self.mu_0[item] = self.E_0[item] / 2 / (1 + self.nu_0[item])
-            self.lamda_0[item] = self.E_0[item] * self.nu_0[item] / (1 + self.nu_0[item]) / (1 - 2 * self.nu_0[item])
+        self.set_stiffness((5e3, 5e4))
 
         self.x_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # position
         self.v_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # velocity
@@ -89,7 +82,18 @@ class MultiObj:
         self.group_cardinality = ti.field(dtype=int, shape=(2,), needs_grad=False)
         self.first_init_done = ti.field(dtype=bool, shape=(), needs_grad=False)
         
-    def set_tumour_cylinder(self, cx=0.0, cy=0.0, cz=0.0, theta=90, h=4.0, r=1.0):
+    def set_stiffness(self, stiffness_tuple):
+        # Material A (normal tissue/fat)
+        self.E_0[0], self.nu_0[0] = stiffness_tuple[0] * self.space_scale, 0.48  # Young's modulus ~5 kPa, nearly incompressible
+        # Material B (tumor)
+        self.E_0[1], self.nu_0[1] = stiffness_tuple[1] * self.space_scale, 0.48  # Young's modulus ~50 kPa, nearly incompressible
+
+        for item in range(2):
+            self.mu_0[item] = self.E_0[item] / 2 / (1 + self.nu_0[item])
+            self.lamda_0[item] = self.E_0[item] * self.nu_0[item] / (1 + self.nu_0[item]) / (1 - 2 * self.nu_0[item])
+    
+    def set_tumour_cylinder(self, cylinder_tuple=(0.0, 0.0, 0.0, 0.0, 17.5, 1.0)):
+        cx, cy, cz, theta, h, r = cylinder_tuple
         self.cylinder_cx = cx
         self.cylinder_cy = cy
         self.cylinder_cz = cz
@@ -122,9 +126,11 @@ class MultiObj:
                 if not self.first_init_done[None]:
                     self.group_cardinality[0] += 1
 
-    def init(self, pos, ori, vel):
-        self.set_tumour_cylinder()
-        self.preprocess_obj()
+    def init(self, pos, ori, vel, cylinder_tuple, stiffness_tuple, tumour_present):
+        self.set_stiffness(stiffness_tuple)
+        if tumour_present:
+            self.set_tumour_cylinder(cylinder_tuple)
+            self.preprocess_obj()
         if not self.first_init_done[None]:
             print(f'healthy: {self.group_cardinality[0]}, tumour: {self.group_cardinality[1]}')
         np.savetxt('output/multi_obj.titles.csv', self.titles.to_numpy(), delimiter=",", fmt='%d')

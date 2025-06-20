@@ -19,6 +19,17 @@ SPEED_1_MM_S = 4.0828765820486765 / SLOW_DOWN
 SPEED_2_DEG_S = 81.63 / SLOW_DOWN
 TIME_STEPS_PER_S = 10 * SLOW_DOWN
 
+def print_point_cloud(arr):
+    # Print the shape for verification
+    print('Shape:', arr.shape)
+
+    # Print min and max along axis 1
+    min_vals = np.min(arr, axis=0)
+    max_vals = np.max(arr, axis=0)
+    print('Min along axis 0:', min_vals)
+    print('Max along axis 0:', max_vals)
+    print('diff', max_vals - min_vals)
+
 @ti.data_oriented
 class Contact(ContactVisualisation):
     def __init__(
@@ -111,28 +122,6 @@ class Contact(ContactVisualisation):
         self.interpolation_exp_frame_end = ti.field(dtype=ti.i32, shape=(), needs_grad=False)
         self.interpolation_alpha = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
 
-        v_npy = np.array([
-            [10, 0, 0, 0, 0, 0],
-            [-10, 0, 0, 0, 0, 0],
-
-            [0, 10, 0, 0, 0, 0],
-            [0, -10, 0, 0, 0, 0],
-            
-            [0, 0, 10, 0, 0, 0],
-            [0, 0, -10, 0, 0, 0],
-            
-            [0, 0, 0, 90, 0, 0],
-            [0, 0, 0, -90, 0, 0],
-            
-            [0, 0, 0, 0, 90, 0],
-            [0, 0, 0, 0, -90, 0],
-            
-            [0, 0, 0, 0, 0, 90],
-            [0, 0, 0, 0, 0, -90]
-        ], dtype=float)
-        self.v = ti.Vector.field(6, dtype=float, shape=v_npy.shape[0], needs_grad=False)
-        self.v.from_numpy(v_npy)
-
         # PID controller parameters
         self.pid_controller_kp = ti.field(dtype=float, shape=(), needs_grad=True)  # Proportional gain
         self.pid_controller_ki = ti.field(dtype=float, shape=(), needs_grad=True)  # Integral gain
@@ -151,17 +140,7 @@ class Contact(ContactVisualisation):
 
         # Target positions now use Euler angles (in degrees) instead of quaternions
         target_positions_npy = np.array([
-            [8, 8, 3.60625, -90, 0, 0],
-            [8, 8, 3.60625-1, -90, 0, 0],
-            [8+12, 8, 3.60625-1, -90, 0, 0],
-            [8+12, 8+1.4, 3.60625-1, -90, 0, 0],
-            [8, 8+1.4, 3.60625-1, -90, 0, 0],
-            [8, 8+2.8, 3.60625-1, -90, 0, 0],
-            [8+12, 8+2.8, 3.60625-1, -90, 0, 0],
-            [8+12, 8+4.2, 3.60625-1, -90, 0, 0],
-            [8, 8+4.2, 3.60625-1, -90, 0, 0],
-            [8, 8+5.6, 3.60625-1, -90, 0, 0],
-            [8+12, 8+5.6, 3.60625-1, -90, 0, 0],
+            [14, 10.25, 3.60625+2.4, -90, 0, 0],
         ], dtype=float)
         self.target_positions = ti.Vector.field(6, dtype=float, shape=target_positions_npy.shape[0], needs_grad=False)  # Changed from 7 to 6
         self.target_positions.from_numpy(target_positions_npy)
@@ -170,13 +149,13 @@ class Contact(ContactVisualisation):
         self.current_target_idx = ti.field(dtype=int, shape=(), needs_grad=False)
         self.current_target_idx[None] = 0
         self.position_tolerance = ti.field(dtype=float, shape=(), needs_grad=False)
-        self.position_tolerance[None] = 0.1  # 1mm tolerance
+        self.position_tolerance[None] = 0.01  # 0.1 mm tolerance
         self.orientation_tolerance = ti.field(dtype=float, shape=(), needs_grad=False)
-        self.orientation_tolerance[None] = 1.0  # 1 degree tolerance
+        self.orientation_tolerance[None] = 0.1  # 0.1 degree tolerance
         
         # Add fields for dwell time control
         self.dwell_frames = ti.field(dtype=int, shape=(), needs_grad=False)
-        self.dwell_frames[None] = 0  # Number of frames to stay at each target
+        self.dwell_frames[None] = 3 # Number of frames to stay at each target
         self.dwell_counter = ti.field(dtype=int, shape=(), needs_grad=False)
         self.dwell_counter[None] = 0
         self.is_dwelling = ti.field(dtype=bool, shape=(), needs_grad=False)
@@ -186,12 +165,29 @@ class Contact(ContactVisualisation):
 
     def set_up_initial_positions(self):
         phantom_pose = [14, 10.25, 2.50625, 0, 0, 0]
-        tactile_sensor_pose = [8, 8, 3.60625, -90, 0, 0]
+        tactile_sensor_pose = [14, 10.25, 3.60625+2.4, -90, 0, 0]
         
+        # Draw random cylinder parameters
+        cx = np.random.uniform(-1.0, 1.0)
+        cy = np.random.uniform(-1.0, 1.0)
+        cz = np.random.uniform(-1.1, 1.1)
+        theta = np.random.uniform(0, 90)
+        h = np.random.uniform(1, 6)
+        r = np.random.uniform(0.1, 0.4)
+        cylinder_tuple = (cx, cy, cz, theta, h, r)
+        stiffness_tumour = np.random.uniform(2.5e4, 7.5e4)
+        stiffness_healthy_tissue = np.random.uniform(2.5e3, 7.5e3)
+        stiffness_tuple = (stiffness_healthy_tissue, stiffness_tumour)
+        # Draw tumour_present: True with 80%, False with 20%
+        tumour_present = np.random.rand() < 0.8
+
         self.mpm_object.init(
             pos=phantom_pose[:3],
             ori=phantom_pose[3:],
             vel=[0.0, 0.0, 0.0],
+            cylinder_tuple=cylinder_tuple,
+            stiffness_tuple=stiffness_tuple,
+            tumour_present=tumour_present,
         )
         t_dx, t_dy, t_dz, rot_x, rot_y, rot_z = tactile_sensor_pose
         self.fem_sensor1.init(rot_x, rot_y, rot_z, t_dx, t_dy, t_dz)
@@ -216,20 +212,6 @@ class Contact(ContactVisualisation):
         ], dtype=int)
         self.motion_start_end_experimental_video_frame_ixs = ti.field(dtype=int, shape=self.velocities_npy.shape[0] + 1, needs_grad=False)
         self.motion_start_end_experimental_video_frame_ixs.from_numpy(arr)
-
-    @ti.kernel
-    def set_up_trajectory(self):
-        for i in range(self.num_frames):
-            self.p_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
-            self.o_sensor1[i] = ti.Vector([0, 0, 0], dt=ti.f32)
-        
-        frames_to_skip = 0
-        frames_per_motion = 100
-        
-        for i in range(self.v.shape[0]):
-            for j in range(frames_to_skip + i * frames_per_motion, frames_to_skip + (i+1) * frames_per_motion):
-                self.p_sensor1[j] = ti.Vector([self.v[i][0], self.v[i][1], self.v[i][2]], dt=ti.f32)
-                self.o_sensor1[j] = ti.Vector([self.v[i][3], self.v[i][4], self.v[i][5]], dt=ti.f32)
 
     def set_pos_control_maybe_print(self, f: int):
         if False:
@@ -460,7 +442,7 @@ class Contact(ContactVisualisation):
         self.loss[None] += rmse
 
     @ti.kernel
-    def compute_pid_control(self):
+    def pid_controller(self):
         # Get current position and orientation using reference keypoint
         current_pos = self.fem_sensor1.pos[0, self.keypoint_indices[0]]
         current_ori = self.fem_sensor1.get_euler_angles()
@@ -484,6 +466,10 @@ class Contact(ContactVisualisation):
             self.dwell_counter[None] = 0
             if not self.last_target_reached[None]:
                 print(f'target {self.current_target_idx[None]} ({target}) reached!')
+                # print('fem_sensor.pos')
+                # print_point_cloud(self.fem_sensor1.pos.to_numpy()[0])
+                # print('fem_sensor.all_nodes')
+                # print_point_cloud(self.fem_sensor1.all_nodes)
         
         # If dwelling, increment counter and check if dwell time is complete
         if self.is_dwelling[None]:
@@ -533,10 +519,11 @@ class Contact(ContactVisualisation):
             # Compute PID control output
             pos_control = self.pid_controller_kp[None] * pos_error + self.pid_controller_ki[None] * self.pos_error_sum[None] + self.pid_controller_kd[None] * pos_derivative
             
+            clamp_speed = True
             # Clamp pos_control to max_speed
             max_speed_pos = 40.0
             pos_control_norm = pos_control.norm()
-            if pos_control_norm > max_speed_pos:
+            if clamp_speed and pos_control_norm > max_speed_pos:
                 pos_control = pos_control / pos_control_norm * max_speed_pos
             
             ori_control = self.pid_controller_kp[None] * ori_error + self.pid_controller_ki[None] * self.ori_error_sum[None] + self.pid_controller_kd[None] * ori_derivative
@@ -544,7 +531,7 @@ class Contact(ContactVisualisation):
             # Clamp ori_control to max_speed_ori
             max_speed_ori = 90.0
             ori_control_norm = ori_control.norm()
-            if ori_control_norm > max_speed_ori:
+            if clamp_speed and ori_control_norm > max_speed_ori:
                 ori_control = ori_control / ori_control_norm * max_speed_ori
 
             # Set control outputs
@@ -586,7 +573,7 @@ def main():
 
     phantom_name = "vascular-phantom.stl"
     num_sub_frames = 50
-    num_frames = 2_000
+    num_frames = 4_000
     num_opt_steps = 20
     dt = 5e-5
     contact_model = Contact(
@@ -595,7 +582,6 @@ def main():
         num_sub_frames=num_sub_frames,
         obj=phantom_name,
     )
-    contact_model.set_up_trajectory()
     np.savetxt(f'output/trajectory.p_sensor1.csv', contact_model.p_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
     np.savetxt(f'output/trajectory.o_sensor1.csv', contact_model.o_sensor1.to_numpy(), delimiter=",", fmt='%.2f')
     
@@ -607,7 +593,13 @@ def main():
         for ts in range(num_frames - 1):
             if ts % 50 == 0:
                 print(f'forward time step: {ts}')
-            contact_model.compute_pid_control()
+            contact_model.pid_controller()
+            if ts == 300:
+                print('fem_sensor.pos')
+                print_point_cloud(contact_model.fem_sensor1.pos.to_numpy()[0])
+                print('fem_sensor.all_nodes')
+                print_point_cloud(contact_model.fem_sensor1.all_nodes)
+                print()
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_pose_control_maybe_print()
             contact_model.fem_sensor1.set_control_vel(0)
@@ -621,15 +613,11 @@ def main():
             contact_model.compute_marker_loss_2()
             
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(0, contact_model.keypoint_indices)
-            keypoint_coords = np.vstack([keypoint_coords, np.array([
-                [8, 8, 3.60625],
-                [8+12, 8, 3.60625],
-                [8, 8+1.4, 3.60625],
-                [8, 8+2.8, 3.60625],
-                [8, 8+4.2, 3.60625],
-                [8, 8+5.6, 3.60625],
-            ], dtype=float)])
-            update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
+            # keypoint_coords = np.array([
+            #     [14, 10.25, 3.60625],
+            #     [14, 10.25, 3.60625+2.4],
+            # ], dtype=float)
+            update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords[0, :].reshape((1, 3)))
 
             if ts == num_frames - 2:
                 sys.exit()
@@ -649,7 +637,7 @@ def main():
             contact_model.fem_sensor1.set_vel.grad(0)
             contact_model.fem_sensor1.set_control_vel.grad(0)
             contact_model.fem_sensor1.set_pose_control.grad()
-            contact_model.compute_pid_control.grad()
+            contact_model.pid_controller.grad()
 
             if (ts - 1) >= 0:
                 contact_model.memory_from_cache(ts - 1)
@@ -660,7 +648,7 @@ def main():
                     contact_model.update(ss)
             
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(0, contact_model.keypoint_indices)
-            keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
+            # keypoint_coords = np.vstack([keypoint_coords, np.array([12.5+5, 11.5, 6.30625+50])])
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords)
         
         print(f"Accumulated gradients after optimisation step {opts}:")
