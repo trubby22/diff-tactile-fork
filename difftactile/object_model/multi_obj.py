@@ -130,18 +130,22 @@ class MultiObj:
                 self.titles[item] = 0
                 self.group_cardinality[0] += 1
 
-    @ti.kernel
-    def reset_tumour(self):
-        self.titles.fill(0)
-        self.group_cardinality.fill(0)
-
     def init(self, pos, ori, vel, cylinder_tuple, stiffness_tuple, tumour_present):
         self.set_stiffness(stiffness_tuple)
-        self.reset_tumour()
         if tumour_present:
+            self.titles.fill(-1)
+            self.group_cardinality.fill(0)
             self.set_tumour_cylinder(cylinder_tuple)
             self.preprocess_obj()
-        print(f'healthy: {self.group_cardinality[0]}, tumour: {self.group_cardinality[1]}')
+        else:
+            self.group_cardinality[0] = self.n_particles
+            self.group_cardinality[1] = 0
+            self.titles.fill(0)
+        print(f'tumour_present: {tumour_present}, healthy: {self.group_cardinality[0]}, tumour: {self.group_cardinality[1]}')
+        tumour_particles_absent = self.group_cardinality[1] == 0
+        if tumour_present and tumour_particles_absent:
+            foo = 7
+        tumour_present = not tumour_particles_absent
         self.set_object_params(pos, ori, vel)
         self.init_object()
 

@@ -18,8 +18,8 @@ SLOW_DOWN = 0.5
 SPEED_1_MM_S = 4.0828765820486765 / SLOW_DOWN
 SPEED_2_DEG_S = 81.63 / SLOW_DOWN
 TIME_STEPS_PER_S = 10 * SLOW_DOWN
-PHANTOM_INITIAL_POSE = [7, 7, 0.925, 0, 0, 0]
-SENSOR_DOME_TIP_INITIAL_POSE = [7, 7, 2.025, -90, 0, 0]
+PHANTOM_INITIAL_POSE = [9.75, 9.75, 1.85, 0, 0, 0]
+SENSOR_DOME_TIP_INITIAL_POSE = [9.75, 9.75, 2.95, -90, 0, 0]
 
 def print_point_cloud(arr):
     # Print the shape for verification
@@ -170,7 +170,7 @@ class Contact(ContactVisualisation):
         # Draw random cylinder parameters
         cx = np.random.uniform(-1.0, 1.0)
         cy = np.random.uniform(-1.0, 1.0)
-        cz = np.random.uniform(-1.1, 1.1)
+        cz = np.random.uniform(-0.9, 0.9)
         theta = np.random.uniform(0, 90)
         h = np.random.uniform(1, 6)
         r = np.random.uniform(0.1, 0.4)
@@ -596,8 +596,8 @@ def main():
 
     phantom_name = "cylinder.stl"
     num_sub_frames = 50
-    num_frames = 200
-    num_opt_steps = 20
+    num_frames = 50
+    num_opt_steps = 50
     dt = 5e-5
     contact_model = Contact(
         dt=dt,
