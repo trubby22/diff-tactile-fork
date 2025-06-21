@@ -3,7 +3,7 @@ import open3d as o3d
 import pickle
 from collections import Counter
 
-ts = 2000
+ts = 4500
 xs = ['pos', 'all_f2v']
 
 with open(f'output/tactile_sensor.ts={ts}.{xs[0]}.pkl', 'rb') as f:

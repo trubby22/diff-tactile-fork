@@ -59,7 +59,7 @@ class Contact(ContactVisualisation):
 
         self.tactile_sensor_initial_position = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
         self.phantom_initial_position = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
-        self.trajectory = ti.Vector.field(6, dtype=float, shape=3, needs_grad=False)
+        self.trajectory = ti.Vector.field(6, dtype=float, shape=2, needs_grad=False)
         self.set_up_initial_positions_and_trajectory()
 
         # Initialize keypoint indices
@@ -198,7 +198,7 @@ class Contact(ContactVisualisation):
         x, y, z, xr, yr, zr = SENSOR_DOME_TIP_INITIAL_POSE
         trajectory_npy = np.array([
             [x, y, z, xr, yr, zr],
-            [x, y, z-1.6, xr, yr, zr],
+            [x, y, z-0.6, xr, yr, zr],
         ], dtype=float)
         self.trajectory.from_numpy(trajectory_npy)
 
@@ -483,10 +483,10 @@ class Contact(ContactVisualisation):
         pos_error_magnitude = pos_error.norm()
         ori_error_magnitude = ori_error.norm()
         
-        is_final_target = self.current_target_idx[None] == self.trajectory.shape[0] - 1
+        maintain_pose_on_final_target = self.current_target_idx[None] == self.trajectory.shape[0] - 1 and self.last_target_reached[None]
 
         # If target is reached and not already dwelling, start dwelling (only for non-final targets)
-        if (not is_final_target and not self.is_dwelling[None] and 
+        if (not maintain_pose_on_final_target and not self.is_dwelling[None] and 
             pos_error_magnitude < self.position_tolerance[None] and 
             ori_error_magnitude < self.orientation_tolerance[None]):
             self.is_dwelling[None] = True
@@ -544,7 +544,7 @@ class Contact(ContactVisualisation):
             
             clamp_speed = True
             # Clamp pos_control to max_speed
-            max_speed_pos = 10.0
+            max_speed_pos = 1.0
             pos_control_norm = pos_control.norm()
             if clamp_speed and pos_control_norm > max_speed_pos:
                 pos_control = pos_control / pos_control_norm * max_speed_pos
@@ -552,7 +552,7 @@ class Contact(ContactVisualisation):
             ori_control = self.pid_controller_kp[None] * ori_error + self.pid_controller_ki[None] * self.ori_error_sum[None] + self.pid_controller_kd[None] * ori_derivative
             
             # Clamp ori_control to max_speed_ori
-            max_speed_ori = 10.0
+            max_speed_ori = 1.0
             ori_control_norm = ori_control.norm()
             if clamp_speed and ori_control_norm > max_speed_ori:
                 ori_control = ori_control / ori_control_norm * max_speed_ori
@@ -561,7 +561,7 @@ class Contact(ContactVisualisation):
             self.tactile_sensor.d_pos_global[None] = pos_control
             self.tactile_sensor.d_ori_global_euler_angles[None] = ori_control
         
-            if False:
+            if True:
                 # Print all variables used in the function
                 print("\nPID Control Variables:")
                 print(f"Current Position (current_pos): {current_pos}")
@@ -617,7 +617,7 @@ def main():
         for ts in range(num_frames - 1):
             if ts % 50 == 0:
                 sensor_mean_deformation_top_10_percent = contact_model.tactile_sensor.compute_mean_deformation_top_10_percent()
-                print(f'sensor_mean_deformation_top_10_percent at ts: {ts}: {sensor_mean_deformation_top_10_percent}')
+                # print(f'sensor_mean_deformation_top_10_percent at ts: {ts}: {sensor_mean_deformation_top_10_percent}')
             if ts % 500 == 0:
                 pickles = [
                     ('pos', contact_model.tactile_sensor.pos.to_numpy()[0]),
@@ -626,7 +626,7 @@ def main():
                 for x, y in pickles:
                     with open(f"output/tactile_sensor.ts={ts}.{x}.pkl", 'wb') as f:
                         pickle.dump(y, f)
-                    print(f'ts: {ts} pickle dumped!')
+                    # print(f'ts: {ts} pickle dumped!')
 
             contact_model.pid_controller(ts)
             contact_model.tactile_sensor.set_pose_control()
