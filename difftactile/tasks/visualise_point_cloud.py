@@ -17,32 +17,32 @@ if False:
     for elem, count in counter.most_common():
         print(f"{elem}: {count}")
 
-# Remove duplicates
-interp_idx_flat = np.unique(interp_idx_flat)
+    # Remove duplicates
+    interp_idx_flat = np.unique(interp_idx_flat)
 
-print(f'num of 3d marker points (after de-duplication): {interp_idx_flat.shape[0]}')
+    print(f'num of 3d marker points (after de-duplication): {interp_idx_flat.shape[0]}')
 
-with open(f'output/fem_sensor.surface_id_np.pkl', 'rb') as f:
-    surface_id_np = pickle.load(f)
+    with open(f'output/fem_sensor.surface_id_np.pkl', 'rb') as f:
+        surface_id_np = pickle.load(f)
 
-surface_nodes = points[surface_id_np]
-marker_nodes = surface_nodes[interp_idx_flat]
-marker_nodes[:, 1] = 1.0
-surface_nodes[:, 1] = 2.0
-# Print mean values along each axis
-print(f'Mean values of marker_nodes:')
-print(f'X-axis mean: {np.mean(marker_nodes[:, 0]):.4f}')
-print(f'Y-axis mean: {np.mean(marker_nodes[:, 1]):.4f}')
-print(f'Z-axis mean: {np.mean(marker_nodes[:, 2]):.4f}')
-# all_nodes[surface_id_np][np.unique(interp_idx_flat)]
+    surface_nodes = points[surface_id_np]
+    marker_nodes = surface_nodes[interp_idx_flat]
+    marker_nodes[:, 1] = 1.0
+    surface_nodes[:, 1] = 2.0
+    # Print mean values along each axis
+    print(f'Mean values of marker_nodes:')
+    print(f'X-axis mean: {np.mean(marker_nodes[:, 0]):.4f}')
+    print(f'Y-axis mean: {np.mean(marker_nodes[:, 1]):.4f}')
+    print(f'Z-axis mean: {np.mean(marker_nodes[:, 2]):.4f}')
+    # all_nodes[surface_id_np][np.unique(interp_idx_flat)]
 
-if True:
+if False:
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
     axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
     o3d.visualization.draw_geometries([pcd, axes])
 
-if False:
+if True:
     with open(f'output/tactile_sensor.all_f2v.pkl', 'rb') as f:
         tetrahedra_indices = pickle.load(f)
     tetrahedra_indices = tetrahedra_indices.astype(int)
