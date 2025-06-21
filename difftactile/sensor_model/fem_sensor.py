@@ -40,17 +40,17 @@ class FEMDomeSensor:
         self.mass = self.vol * self.rho
         self.eps = 1e-10
 
-        self.E_init = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-        self.nu_init = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+        self.E_init = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
+        self.nu_init = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
         self.E_init[None], self.nu_init[None] = 0.8e4, 0.43#0.3e4, 0.445  # Young's modulus and Poisson's ratio
 
-        self.mu = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
-        self.lam = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+        self.mu = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
+        self.lam = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
         self.mu[None] = self.E_init[None] / 2 / (1 + self.nu_init[None])
         self.lam[None] = self.E_init[None] * self.nu_init[None] / (1 + self.nu_init[None]) / (1 - 2 * self.nu_init[None])  # Lame parameters
         self.damping = 10.0
 
-        self.init_x = ti.Vector.field(3, float, self.n_verts, needs_grad=True)
+        self.init_x = ti.Vector.field(3, float, self.n_verts, needs_grad=False)
         self.init_x.from_numpy(self.all_nodes.astype(np.float32))
         self.layer_id = ti.field(int, self.n_verts) # indicate layers
         self.layer_id.from_numpy(self.layer_idxs.astype(np.int32))
@@ -59,8 +59,8 @@ class FEMDomeSensor:
         self.surface_id = ti.field(int, len(self.surface_id_np))
         self.surface_id.from_numpy(self.surface_id_np.astype(np.int32))
         self.num_surface = len(self.surface_id_np)
-        self.surface_cam_loc = ti.Vector.field(2, float, self.num_surface, needs_grad = True)
-        self.surface_cam_virtual_loc = ti.Vector.field(2, float, self.num_surface, needs_grad=True)
+        self.surface_cam_loc = ti.Vector.field(2, float, self.num_surface, needs_grad=False)
+        self.surface_cam_virtual_loc = ti.Vector.field(2, float, self.num_surface, needs_grad=False)
 
         # cam model
         self.num_k_closest = 5
@@ -68,10 +68,10 @@ class FEMDomeSensor:
         self.num_markers = len(self.initial_markers)
         self.visualise_2d(interp_idx)
 
-        self.predict_markers = ti.Vector.field(2, float, self.num_markers, needs_grad = True)
-        self.virtual_markers = ti.Vector.field(2, float, self.num_markers, needs_grad=True)
+        self.predict_markers = ti.Vector.field(2, float, self.num_markers, needs_grad=False)
+        self.virtual_markers = ti.Vector.field(2, float, self.num_markers, needs_grad=False)
 
-        self.interp_weight = ti.Vector.field(self.num_k_closest, float, self.num_markers, needs_grad=True)
+        self.interp_weight = ti.Vector.field(self.num_k_closest, float, self.num_markers, needs_grad=False)
         self.interp_weight.from_numpy(interp_weight.astype(np.float32))
         self.interp_idx = ti.Vector.field(self.num_k_closest, int, self.num_markers)
         self.interp_idx.from_numpy(interp_idx.astype(np.int32))
@@ -81,46 +81,46 @@ class FEMDomeSensor:
         self.contact_seg = ti.Vector.field(3, int, self.num_triangles) # surface triangle mesh
         self.contact_seg.from_numpy(self.surface_f2v.astype(np.int32))
 
-        self.virtual_pos = ti.Vector.field(3, float, shape=(self.sub_steps, self.n_verts), needs_grad = True)
-        self.pos = ti.Vector.field(3, float, shape=(self.sub_steps, self.n_verts), needs_grad = True)
-        self.vel = ti.Vector.field(3, float, shape=(self.sub_steps, self.n_verts), needs_grad = True)
+        self.virtual_pos = ti.Vector.field(3, float, shape=(self.sub_steps, self.n_verts), needs_grad=False)
+        self.pos = ti.Vector.field(3, float, shape=(self.sub_steps, self.n_verts), needs_grad=False)
+        self.vel = ti.Vector.field(3, float, shape=(self.sub_steps, self.n_verts), needs_grad=False)
 
-        self.B = ti.Matrix.field(3, 3, float, self.n_cells, needs_grad=True)
-        self.phi = ti.field(float, self.n_cells, needs_grad=True)  # potential energy of each face (Neo-Hookean)
+        self.B = ti.Matrix.field(3, 3, float, self.n_cells, needs_grad=False)
+        self.phi = ti.field(float, self.n_cells, needs_grad=False)  # potential energy of each face (Neo-Hookean)
 
-        self.external_force_field = ti.Vector.field(3, dtype=ti.f32, shape=(self.sub_steps, self.n_verts), needs_grad = True) # contact force between FEM node to the closest particle
-        self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad = True) # surface aggreated 3-axis forces
+        self.external_force_field = ti.Vector.field(3, dtype=ti.f32, shape=(self.sub_steps, self.n_verts), needs_grad=False) # contact force between FEM node to the closest particle
+        self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad=False) # surface aggreated 3-axis forces
 
         # contact model parameters (default)
-        self.out_direction = ti.Vector.field(3, float, (), needs_grad=True)
+        self.out_direction = ti.Vector.field(3, float, (), needs_grad=False)
 
         ## control parameters
-        self.d_pos_global = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
-        self.d_ori_global_euler_angles = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
+        self.d_pos_global = ti.Vector.field(3, ti.f32, shape = (), needs_grad=False)
+        self.d_ori_global_euler_angles = ti.Vector.field(3, ti.f32, shape = (), needs_grad=False)
 
-        self.d_pos_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
-        self.d_ori_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=True)
+        self.d_pos_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=False)
+        self.d_ori_local = ti.Vector.field(3, ti.f32, shape = (), needs_grad=False)
 
-        self.rot_h = ti.Matrix.field(3, 3, ti.f32, shape = (), needs_grad=True)
+        self.rot_h = ti.Matrix.field(3, 3, ti.f32, shape = (), needs_grad=False)
         self.rot_world = ti.Matrix.field(3, 3, ti.f32, shape = ())
-        self.rot_local = ti.Matrix.field(3, 3, ti.f32, shape = (), needs_grad=True)
-        self.inv_rot = ti.Matrix.field(3, 3, ti.f32, shape = (), needs_grad=True)
+        self.rot_local = ti.Matrix.field(3, 3, ti.f32, shape = (), needs_grad=False)
+        self.inv_rot = ti.Matrix.field(3, 3, ti.f32, shape = (), needs_grad=False)
 
-        self.trans_h = ti.Matrix.field(4, 4, ti.f32, shape = (), needs_grad=True) ##
+        self.trans_h = ti.Matrix.field(4, 4, ti.f32, shape = (), needs_grad=False) ##
         self.trans_world = ti.Matrix.field(4, 4, ti.f32, shape = ()) ## ee to world
-        self.trans_local = ti.Matrix.field(4, 4, ti.f32, shape = (), needs_grad=True) ## ee1 -> ee2
-        self.inv_trans_h = ti.Matrix.field(4, 4, ti.f32, shape = (), needs_grad=True)
-        self.dtrans_h = ti.Matrix.field(4, 4, ti.f32, shape = (), needs_grad=True)
-        self.control_vel = ti.Vector.field(3, float, shape = (self.n_verts), needs_grad=True)
-        self.sdf = ti.field(dtype=ti.f32, shape=(), needs_grad=True)
+        self.trans_local = ti.Matrix.field(4, 4, ti.f32, shape = (), needs_grad=False) ## ee1 -> ee2
+        self.inv_trans_h = ti.Matrix.field(4, 4, ti.f32, shape = (), needs_grad=False)
+        self.dtrans_h = ti.Matrix.field(4, 4, ti.f32, shape = (), needs_grad=False)
+        self.control_vel = ti.Vector.field(3, float, shape = (self.n_verts), needs_grad=False)
+        self.sdf = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
         self.cache = dict() # for grad backward
         self.first = ti.field(dtype=bool, shape=(), needs_grad=False)
         self.first[None] = True
 
-        self.my_rot_v = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)
-        self.my_trans_v = ti.Vector.field(3, dtype=float, shape=(), needs_grad=True)
-        self.my_trans_mat = ti.Matrix.field(4, 4, dtype=float, shape=(), needs_grad=True)
-        self.my_rot_mat = ti.Matrix.field(3, 3, dtype=float, shape=(), needs_grad=True)
+        self.my_rot_v = ti.Vector.field(3, dtype=float, shape=(), needs_grad=False)
+        self.my_trans_v = ti.Vector.field(3, dtype=float, shape=(), needs_grad=False)
+        self.my_trans_mat = ti.Matrix.field(4, 4, dtype=float, shape=(), needs_grad=False)
+        self.my_rot_mat = ti.Matrix.field(3, 3, dtype=float, shape=(), needs_grad=False)
 
     def init(self, rot_x, rot_y, rot_z, t_dx, t_dy, t_dz):
         rot = R.from_rotvec(np.deg2rad([rot_x, rot_y, rot_z]))

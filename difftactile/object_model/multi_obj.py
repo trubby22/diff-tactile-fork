@@ -53,10 +53,10 @@ class MultiObj:
         self.eps = 1e-5
         self.damping = 35.0
 
-        self.E_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
-        self.nu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
-        self.lamda_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
-        self.mu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=True)
+        self.E_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=False)
+        self.nu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=False)
+        self.lamda_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=False)
+        self.mu_0 = ti.field(dtype=ti.f32, shape=(2,), needs_grad=False)
 
         # Material A (normal tissue/fat)
         self.E_0[0], self.nu_0[0] = 5e3 * self.space_scale, 0.48  # Young's modulus ~5 kPa, nearly incompressible
@@ -67,22 +67,22 @@ class MultiObj:
             self.mu_0[item] = self.E_0[item] / 2 / (1 + self.nu_0[item])
             self.lamda_0[item] = self.E_0[item] * self.nu_0[item] / (1 + self.nu_0[item]) / (1 - 2 * self.nu_0[item])
 
-        self.x_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # position
-        self.v_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # velocity
+        self.x_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)  # position
+        self.v_0 = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)  # velocity
 
-        self.C_0 = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # affine velocity field
-        self.F_new = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)
-        self.F_0 = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)  # deformation gradient
-        self.U_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)
-        self.V_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)
-        self.S_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=True)
+        self.C_0 = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)  # affine velocity field
+        self.F_new = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)
+        self.F_0 = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)  # deformation gradient
+        self.U_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)
+        self.V_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)
+        self.S_svd = ti.Matrix.field(3, 3, dtype=float, shape=(self.sub_steps, self.n_particles), needs_grad=False)
 
-        self.grid_v_in = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node momentum/velocity
-        self.grid_v_out = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node momentum/velocity
-        self.grid_m = ti.field(dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node mass
-        self.grid_f = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=True)  # grid node external force
+        self.grid_v_in = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=False)  # grid node momentum/velocity
+        self.grid_v_out = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=False)  # grid node momentum/velocity
+        self.grid_m = ti.field(dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=False)  # grid node mass
+        self.grid_f = ti.Vector.field(3, dtype=float, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid), needs_grad=False)  # grid node external force
         self.grid_occupy = ti.field(dtype=int, shape=(self.sub_steps, self.n_grid, self.n_grid, self.n_grid))
-        self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad = True)
+        self.surf_f = ti.Vector.field(3, float, shape=(self.sub_steps), needs_grad=False)
         
         self.cache = dict() # for grad backward
 
