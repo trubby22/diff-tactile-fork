@@ -23,9 +23,9 @@ class FEMDomeSensor:
         self.sub_steps = sub_steps
         self.dt = dt
         self.N_node = 400 # number of nodes in the most inner layer
-        self.N_t = 4+1 # thickness
+        self.N_t = 4 # thickness
         self.t_res = 0.2 # [cm]; inter-layer distance
-        self.inner_radius = 2.7-self.t_res # [cm]
+        self.inner_radius = 2.7 # [cm]
 
         self.all_nodes, self.all_f2v, self.surface_f2v, self.layer_idxs = self.init_mesh()
         self.n_verts = len(self.all_nodes)
@@ -476,6 +476,8 @@ class FEMDomeSensor:
             ratio = (rad**2) / (self.inner_radius**2)
             n_node = int(self.N_node * ratio)
             layer_nodes, cylinder_height, is_stem_wall, hemisphere_nodes = self.fibonacci_sphere(samples=n_node, scale = rad)
+            if i == 0:
+                min_cylinder_height = cylinder_height
             all_nodes.append(layer_nodes)
             cur_layer_height = np.copy(layer_nodes[:, 1])
             cur_layer_height[~is_stem_wall] = cylinder_height + 100 + i * 100
@@ -496,39 +498,54 @@ class FEMDomeSensor:
         translation_vec = np.array([0, delta_y, 0])
         all_nodes += translation_vec
         triangle_nodes = np.array([all_nodes[:,0], layer_height, all_nodes[:,2]]).T
+        inner_volume_particles = np.zeros((100, 3), dtype=np.float32)
+        inner_volume_particles[:, 1] = np.linspace(-1 * min_cylinder_height * 0.9, min_cylinder_height * 0.9, 100)
+        triangle_nodes = np.vstack([triangle_nodes, inner_volume_particles])
+
         all_f2v = Delaunay(triangle_nodes).simplices
         layer_idxs = np.concatenate(layer_idxs,axis=0)
 
-        # --- Begin filtering out inner-most layer (layer 0) ---
-        # Find indices of inner-most layer nodes
-        inner_layer_mask = (layer_idxs == 0)
-        inner_layer_indices = np.where(inner_layer_mask)[0]
-        n_inner = len(inner_layer_indices)
-        # Indices to keep (not in inner-most layer)
-        keep_mask = ~inner_layer_mask
-        keep_indices = np.where(keep_mask)[0]
-        # Build mapping from old indices to new indices
-        old_to_new = -np.ones(len(layer_idxs), dtype=int)
-        old_to_new[keep_indices] = np.arange(len(keep_indices))
-        # Filter all_nodes and layer_idxs
-        all_nodes = all_nodes[keep_mask]
-        layer_idxs = layer_idxs[keep_mask]
-        # Filter all_f2v: keep only those tetrahedra whose all nodes are not in inner-most layer
-        mask_f2v = np.all(np.isin(all_f2v, keep_indices), axis=1)
-        all_f2v = all_f2v[mask_f2v]
-        # Remap indices in all_f2v
-        all_f2v = old_to_new[all_f2v]
-        # Filter surface_f2v and remap indices (subtract n_inner)
-        if surface_f2v is not None:
-            # Only keep triangles whose all nodes are not in inner-most layer
-            mask_surf = np.all(np.isin(surface_f2v, keep_indices), axis=1)
-            surface_f2v = surface_f2v[mask_surf]
-            surface_f2v = old_to_new[surface_f2v]
-        # --- End filtering ---
+        # --- Filter out any simplex containing an inner_volume_particle ---
+        n_total = triangle_nodes.shape[0]
+        n_inner_particles = inner_volume_particles.shape[0]
+        first_inner_idx = n_total - n_inner_particles
+        # Keep only those simplices where all indices are < first_inner_idx
+        mask_no_inner_particles = np.all(all_f2v < first_inner_idx, axis=1)
+        all_f2v = all_f2v[mask_no_inner_particles]
+        # --- End filter ---
+
+        if False:
+            # --- Begin filtering out inner-most layer (layer 0) ---
+            # Find indices of inner-most layer nodes
+            inner_layer_mask = (layer_idxs == 0)
+            inner_layer_indices = np.where(inner_layer_mask)[0]
+            n_inner = len(inner_layer_indices)
+            # Indices to keep (not in inner-most layer)
+            keep_mask = ~inner_layer_mask
+            keep_indices = np.where(keep_mask)[0]
+            # Build mapping from old indices to new indices
+            old_to_new = -np.ones(len(layer_idxs), dtype=int)
+            old_to_new[keep_indices] = np.arange(len(keep_indices))
+            # Filter all_nodes and layer_idxs
+            all_nodes = all_nodes[keep_mask]
+            layer_idxs = layer_idxs[keep_mask]
+            # Filter all_f2v: keep only those tetrahedra whose all nodes are not in inner-most layer
+            mask_f2v = np.all(np.isin(all_f2v, keep_indices), axis=1)
+            all_f2v = all_f2v[mask_f2v]
+            # Remap indices in all_f2v
+            all_f2v = old_to_new[all_f2v]
+            # Filter surface_f2v and remap indices (subtract n_inner)
+            if surface_f2v is not None:
+                # Only keep triangles whose all nodes are not in inner-most layer
+                mask_surf = np.all(np.isin(surface_f2v, keep_indices), axis=1)
+                surface_f2v = surface_f2v[mask_surf]
+                surface_f2v = old_to_new[surface_f2v]
+            triangle_nodes = triangle_nodes[keep_mask]
+            # --- End filtering ---
 
         pickles = [
             ('all_nodes', all_nodes),
-            ('triangle_nodes', triangle_nodes[keep_mask]),
+            ('triangle_nodes', triangle_nodes),
             ('all_f2v', all_f2v),
             ('layer_idxs', layer_idxs),
         ]
