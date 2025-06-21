@@ -19,7 +19,7 @@ SPEED_1_MM_S = 4.0828765820486765 / SLOW_DOWN
 SPEED_2_DEG_S = 81.63 / SLOW_DOWN
 TIME_STEPS_PER_S = 10 * SLOW_DOWN
 PHANTOM_INITIAL_POSE = [9.75, 9.75, 1.85, 0, 0, 0]
-SENSOR_DOME_TIP_INITIAL_POSE = [9.75, 9.75, 2.95+10, -90, 0, 0]
+SENSOR_DOME_TIP_INITIAL_POSE = [9.75, 9.75, 2.95, -90, 0, 0]
 
 def print_point_cloud(arr):
     # Print the shape for verification
@@ -60,7 +60,6 @@ class Contact(ContactVisualisation):
         self.tactile_sensor_initial_position = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
         self.phantom_initial_position = ti.Vector.field(3, dtype=ti.f32, shape=1, needs_grad=False)
         self.trajectory = ti.Vector.field(6, dtype=float, shape=2, needs_grad=False)
-
         self.set_up_initial_positions_and_trajectory()
 
         # Initialize keypoint indices
@@ -166,10 +165,7 @@ class Contact(ContactVisualisation):
     def set_up_initial_positions_and_trajectory(self):
         ix = self.fem_sensor1.get_keypoint_indices_numpy_point_a()
         camera_lens_to_sensor_tip = self.fem_sensor1.all_nodes[ix, 1]
-
         self.phantom_pose = PHANTOM_INITIAL_POSE.copy()
-        self.sensor_dome_tip_initial_pose = SENSOR_DOME_TIP_INITIAL_POSE.copy()
-        self.sensor_dome_tip_initial_pose[2] += camera_lens_to_sensor_tip
         
         # Draw random cylinder parameters
         cx = np.random.uniform(-1.0, 1.0)
@@ -185,8 +181,6 @@ class Contact(ContactVisualisation):
         # Draw tumour_present: True with 80%, False with 20%
         tumour_present = np.random.rand() < 0.8
 
-        # print(cylinder_tuple, stiffness_tuple, tumour_present)
-
         self.mpm_object.init(
             pos=self.phantom_pose[:3],
             ori=self.phantom_pose[3:],
@@ -195,22 +189,24 @@ class Contact(ContactVisualisation):
             stiffness_tuple=stiffness_tuple,
             tumour_present=tumour_present,
         )
-        t_dx, t_dy, t_dz, rot_x, rot_y, rot_z = self.sensor_dome_tip_initial_pose
-        self.fem_sensor1.init(rot_x, rot_y, rot_z, t_dx, t_dy, t_dz)
 
-        self.tactile_sensor_initial_position[0] = ti.Vector(self.sensor_dome_tip_initial_pose[:3])
-        self.phantom_initial_position[0] = ti.Vector(self.phantom_pose[:3])
-    
         xr_offset = np.random.uniform(-15, 15)
-        press_depth = np.random.uniform(1.0, 2.0)
-
+        press_depth = np.random.uniform(0.6, 1.6)
         x, y, z, xr, yr, zr = SENSOR_DOME_TIP_INITIAL_POSE
         trajectory_npy = np.array([
-            [x, y, z, xr, yr, zr],
-            [x, y, z-5, xr, yr, zr],
+            [x, y, z, xr+xr_offset, yr, zr],
+            [x, y, z-press_depth, xr+xr_offset, yr, zr],
         ], dtype=float)
         self.trajectory.from_numpy(trajectory_npy)
 
+        self.sensor_dome_tip_initial_pose = trajectory_npy[0].tolist()
+        self.sensor_dome_tip_initial_pose[2] += camera_lens_to_sensor_tip
+        t_dx, t_dy, t_dz, rot_x, rot_y, rot_z = self.sensor_dome_tip_initial_pose
+        self.fem_sensor1.init(rot_x, rot_y, rot_z, t_dx, t_dy, t_dz)
+        self.tactile_sensor_initial_position[0] = ti.Vector(self.sensor_dome_tip_initial_pose[:3])
+        self.phantom_initial_position[0] = ti.Vector(self.phantom_pose[:3])
+    
+        
     def reset_pid_controller(self):
         self.pos_error_sum.fill(0)
         self.ori_error_sum.fill(0)
@@ -466,7 +462,7 @@ class Contact(ContactVisualisation):
         self.loss[None] += rmse
 
     @ti.kernel
-    def pid_controller(self):
+    def pid_controller(self, ts: ti.i32):
         # Get current position and orientation using reference keypoint
         current_pos = self.fem_sensor1.pos[0, self.keypoint_indices[0]]
         current_ori = self.fem_sensor1.get_euler_angles()
@@ -489,7 +485,7 @@ class Contact(ContactVisualisation):
             self.is_dwelling[None] = True
             self.dwell_counter[None] = 0
             if not self.last_target_reached[None]:
-                print(f'target {self.current_target_idx[None]} ({target}) reached!')
+                print(f'target {self.current_target_idx[None]} ({target}) reached at time step {ts}!')
                 # print('fem_sensor.pos')
                 # print_point_cloud(self.fem_sensor1.pos.to_numpy()[0])
                 # print('fem_sensor.all_nodes')
@@ -545,7 +541,7 @@ class Contact(ContactVisualisation):
             
             clamp_speed = True
             # Clamp pos_control to max_speed
-            max_speed_pos = 1_000.0
+            max_speed_pos = 10.0
             pos_control_norm = pos_control.norm()
             if clamp_speed and pos_control_norm > max_speed_pos:
                 pos_control = pos_control / pos_control_norm * max_speed_pos
@@ -553,7 +549,7 @@ class Contact(ContactVisualisation):
             ori_control = self.pid_controller_kp[None] * ori_error + self.pid_controller_ki[None] * self.ori_error_sum[None] + self.pid_controller_kd[None] * ori_derivative
             
             # Clamp ori_control to max_speed_ori
-            max_speed_ori = 900.0
+            max_speed_ori = 45.0
             ori_control_norm = ori_control.norm()
             if clamp_speed and ori_control_norm > max_speed_ori:
                 ori_control = ori_control / ori_control_norm * max_speed_ori
@@ -597,7 +593,7 @@ def main():
 
     phantom_name = "cylinder.stl"
     num_sub_frames = 50
-    num_frames = 4_000
+    num_frames = 150
     num_opt_steps = 50
     dt = 5e-5
     contact_model = Contact(
@@ -616,16 +612,15 @@ def main():
         contact_model.reset_3d_scene()
         print('forward')
         for ts in range(num_frames - 1):
-            contact_model.pid_controller()
+            contact_model.pid_controller(ts)
             contact_model.fem_sensor1.set_pose_control()
             contact_model.fem_sensor1.set_pose_control_maybe_print()
             contact_model.fem_sensor1.set_control_vel(0)
             contact_model.fem_sensor1.set_vel(0)
             contact_model.reset()
-            if ts % 100 == 0:
-                print(f'forward time step: {ts}')
             for ss in range(num_sub_frames - 1):
                 contact_model.update(ss)
+            contact_model.memory_to_cache(0)
             
             keypoint_coords = contact_model.fem_sensor1.get_keypoint_coordinates(0, contact_model.keypoint_indices)
             update_gui(contact_model, gui_tuple, num_frames, ts, keypoint_coords[0, :].reshape((1, 3)))

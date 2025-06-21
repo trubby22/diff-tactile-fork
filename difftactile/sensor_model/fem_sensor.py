@@ -54,11 +54,11 @@ class FEMDomeSensor:
         self.init_x.from_numpy(self.all_nodes.astype(np.float32))
         self.layer_id = ti.field(int, self.n_verts) # indicate layers
         self.layer_id.from_numpy(self.layer_idxs.astype(np.int32))
-        self.surface_id_np = np.where(self.layer_idxs==0)[0]
+        self.markers_surface_id_np = np.where(self.layer_idxs==0)[0]
 
-        self.surface_id = ti.field(int, len(self.surface_id_np))
-        self.surface_id.from_numpy(self.surface_id_np.astype(np.int32))
-        self.num_surface = len(self.surface_id_np)
+        self.markers_surface_id = ti.field(int, len(self.markers_surface_id_np))
+        self.markers_surface_id.from_numpy(self.markers_surface_id_np.astype(np.int32))
+        self.num_surface = len(self.markers_surface_id_np)
         self.surface_cam_loc = ti.Vector.field(2, float, self.num_surface, needs_grad = True)
         self.surface_cam_virtual_loc = ti.Vector.field(2, float, self.num_surface, needs_grad=False)
 
@@ -184,7 +184,7 @@ class FEMDomeSensor:
             center = (int(round(pos[0])), int(round(pos[1])))
             cv2.circle(overlay_img, center, radius=5, color=(0, 0, 255), thickness=2)  # Red circle
         cv2.imwrite("../tasks/output/init_cam_model.png", overlay_img)
-        surface_nodes = self.all_nodes[self.surface_id_np]
+        surface_nodes = self.all_nodes[self.markers_surface_id_np]
         cam_3D_nodes = np.array([surface_nodes[:,0], surface_nodes[:,2], surface_nodes[:,1]]).T
         with open(f"output/fem_sensor.cam_3d_nodes.pkl", 'wb') as f:
             pickle.dump(cam_3D_nodes, f)
@@ -220,10 +220,10 @@ class FEMDomeSensor:
         interp_idx_flat = interp_idx.flatten()
         with open(f"output/fem_sensor.interp_idx_flat.pkl", 'wb') as f:
             pickle.dump(interp_idx_flat, f)
-        with open(f"output/fem_sensor.surface_id_np.pkl", 'wb') as f:
-            pickle.dump(self.surface_id_np, f)
+        with open(f"output/fem_sensor.markers_surface_id_np.pkl", 'wb') as f:
+            pickle.dump(self.markers_surface_id_np, f)
         np.savetxt('output/fem_sensor.interp_idx_flat.csv', interp_idx_flat, delimiter=",", fmt='%d')
-        np.savetxt('output/fem_sensor.surface_id_np.csv', self.surface_id_np, delimiter=",", fmt='%d')
+        np.savetxt('output/fem_sensor.markers_surface_id_np.csv', self.markers_surface_id_np, delimiter=",", fmt='%d')
 
         return surf_2d, interp_idx, interp_weight
 
@@ -234,7 +234,7 @@ class FEMDomeSensor:
         """
         # Get the relevant 3D marker points
         marker_indices = np.unique(interp_idx.flatten())
-        marker_points_3d = self.all_nodes[self.surface_id_np][marker_indices]
+        marker_points_3d = self.all_nodes[self.markers_surface_id_np][marker_indices]
         # Reorder axes to match camera convention
         cam_3D_nodes = np.array([marker_points_3d[:,0], marker_points_3d[:,2], marker_points_3d[:,1]]).T
         # Project to 2D
@@ -253,8 +253,8 @@ class FEMDomeSensor:
     @ti.kernel
     def extract_markers(self, f:ti.i32):
         for i in range(self.num_surface):
-            pos = self.pos[f, self.surface_id[i]]
-            init_pos = self.virtual_pos[f, self.surface_id[i]]
+            pos = self.pos[f, self.markers_surface_id[i]]
+            init_pos = self.virtual_pos[f, self.markers_surface_id[i]]
             hom_pos = ti.Vector([pos[0], pos[1], pos[2], 1.0])
             hom_init_pos = ti.Vector([init_pos[0], init_pos[1], init_pos[2], 1.0])
             inv_pos = self.inv_trans_h[None] @ hom_pos
