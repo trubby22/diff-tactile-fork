@@ -18,8 +18,8 @@ SLOW_DOWN = 0.5
 SPEED_1_MM_S = 4.0828765820486765 / SLOW_DOWN
 SPEED_2_DEG_S = 81.63 / SLOW_DOWN
 TIME_STEPS_PER_S = 10 * SLOW_DOWN
-PHANTOM_INITIAL_POSE = [9.75, 9.75, 1.85, 0, 0, 0]
-SENSOR_DOME_TIP_INITIAL_POSE = [9.75, 9.75, 2.95, -90, 0, 0]
+PHANTOM_INITIAL_POSE = [9.75, 9.75, 1.85+2, 0, 0, 0]
+SENSOR_DOME_TIP_INITIAL_POSE = [9.75, 9.75, 2.95+3, -90, 0, 0]
 
 def print_point_cloud(arr):
     # Print the shape for verification
@@ -198,7 +198,7 @@ class Contact(ContactVisualisation):
         x, y, z, xr, yr, zr = SENSOR_DOME_TIP_INITIAL_POSE
         trajectory_npy = np.array([
             [x, y, z, xr, yr, zr],
-            [x, y, z-0.6, xr, yr, zr],
+            [x, y, z-2-0.6, xr, yr, zr],
         ], dtype=float)
         self.trajectory.from_numpy(trajectory_npy)
 
@@ -561,7 +561,7 @@ class Contact(ContactVisualisation):
             self.tactile_sensor.d_pos_global[None] = pos_control
             self.tactile_sensor.d_ori_global_euler_angles[None] = ori_control
         
-            if True:
+            if False:
                 # Print all variables used in the function
                 print("\nPID Control Variables:")
                 print(f"Current Position (current_pos): {current_pos}")
