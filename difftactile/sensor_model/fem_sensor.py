@@ -54,7 +54,7 @@ class FEMDomeSensor:
         self.init_x.from_numpy(self.all_nodes.astype(np.float32))
         self.layer_id = ti.field(int, self.n_verts) # indicate layers
         self.layer_id.from_numpy(self.layer_idxs.astype(np.int32))
-        self.surface_id_np = np.where(self.layer_idxs==(0))[0]
+        self.surface_id_np = np.where(self.layer_idxs==0)[0]
 
         self.surface_id = ti.field(int, len(self.surface_id_np))
         self.surface_id.from_numpy(self.surface_id_np.astype(np.int32))
@@ -486,7 +486,7 @@ class FEMDomeSensor:
         delta_y = 2.4 - point_a[1]
         translation_vec = np.array([0, delta_y, 0])
         all_nodes += translation_vec
-        layer_height += delta_y
+        # layer_height += delta_y
         triangle_nodes = np.array([all_nodes[:,0], layer_height, all_nodes[:,2]]).T
         all_f2v = Delaunay(triangle_nodes).simplices # M * 4 (tetrahedrons)
         layer_idxs = np.concatenate(layer_idxs,axis=0) # N

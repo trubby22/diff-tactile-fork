@@ -190,10 +190,10 @@ def set_up_gui(phantom_initial_pose, tactile_sensor_initial_pose):
         camera = ti.ui.Camera()
         camera.projection_mode(ti.ui.ProjectionMode.Perspective)
         x, y, z = tactile_sensor_initial_pose[:3]
-        camera.position(x, y, z+50)
-        camera.up(0, 1, 0)
+        camera.position(x-50, y, z)
+        camera.up(0, 0, 1)
         camera.lookat(x, y, z)
-        camera.fov(10)
+        camera.fov(15)
         if enable_gui1:
             gui1 = ti.GUI("low-level camera", res=window_res)
         else:
@@ -284,19 +284,19 @@ def update_gui(contact_model, gui_tuple, num_frames, ts, key_points_coords=None)
             color=(1.0, 1.0, 0.0),
             radius=0.02,
         )
-        # scene.particles(
-        #     contact_model.sensor_points,
-        #     color=(0.0, 1.0, 0.0),
-        #     radius=0.02,
-        # )
+        scene.particles(
+            contact_model.sensor_points,
+            color=(0.0, 1.0, 0.0),
+            radius=0.02,
+        )
         
-        # if key_points_coords is not None:
-        #     contact_model.key_points.from_numpy(key_points_coords)
-        #     scene.particles(
-        #         contact_model.key_points,
-        #         color=(1.0, 1.0, 0.0),
-        #         radius=0.1,
-        #     )
+        if key_points_coords is not None:
+            contact_model.key_points.from_numpy(key_points_coords)
+            scene.particles(
+                contact_model.key_points,
+                color=(1.0, 0.0, 0.0),
+                radius=0.1,
+            )
         
         canvas.scene(scene)
         window.show()
