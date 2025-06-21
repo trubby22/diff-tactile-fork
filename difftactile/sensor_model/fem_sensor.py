@@ -22,7 +22,7 @@ class FEMDomeSensor:
         np.set_printoptions(precision=3, floatmode='maxprec', suppress=False)
         self.sub_steps = sub_steps
         self.dt = dt
-        self.N_node = 400 # number of nodes in the most inner layer
+        self.N_node = 800 # number of nodes in the most inner layer
         self.N_t = 4+1 # thickness
         self.t_res = 0.2 # [cm]; inter-layer distance
         self.inner_radius = 2.7-self.t_res # [cm]
@@ -437,8 +437,9 @@ class FEMDomeSensor:
         points = hemisphere_points.copy()
 
         dome = points[:, 1] >= stem_wall_height
-        stem_wall = (points[:, 1] < stem_wall_height) & (points[:, 1] >= rigid_stem_wall_height)
+        elastic_stem_wall = (points[:, 1] < stem_wall_height) & (points[:, 1] >= rigid_stem_wall_height)
         rigid_stem_wall = points[:, 1] < rigid_stem_wall_height
+        stem_wall = elastic_stem_wall | rigid_stem_wall
 
         # Compute angle in xz-plane for these points
         angles = np.arctan2(points[stem_wall, 2], points[stem_wall, 0])
@@ -448,9 +449,8 @@ class FEMDomeSensor:
         # y remains unchanged
 
         if is_inner_surface:
-            stem_wall_hemisphere = hemisphere_points[:, 1] < stem_wall_height
-            hemisphere_points[stem_wall_hemisphere, 0] = 0
-            hemisphere_points[stem_wall_hemisphere, 2] = 0
+            hemisphere_points[stem_wall, 0] = 0
+            hemisphere_points[stem_wall, 2] = 0
         hemisphere_points *= radius_of_curvature
         if is_inner_surface:
             hemisphere_points -= self.t_res
@@ -458,10 +458,10 @@ class FEMDomeSensor:
 
         indices = np.zeros(points.shape[0], dtype=int)
         indices[rigid_stem_wall] = 0
-        indices[stem_wall] = 1
+        indices[elastic_stem_wall] = 1
         indices[dome] = 2
 
-        return points, stem_wall_height, stem_wall, hemisphere_points, indices
+        return points, hemisphere_points, indices
 
     def generate_cylinder_lateral_surface(self, samples=100, scale=1.0):
         """
@@ -487,21 +487,15 @@ class FEMDomeSensor:
         all_nodes = []
         surface_f2v = None
         layer_idxs = []
-        layer_height = []
         all_hemisphere_nodes = []
         num_cur_node = 0
         for i in range(self.N_t):
             rad = self.inner_radius + i * self.t_res
             ratio = (rad**2) / (self.inner_radius**2)
             n_node = int(self.N_node * ratio)
-            layer_nodes, cylinder_height, is_stem_wall, hemisphere_nodes, indices = self.fibonacci_sphere(samples=n_node, radius_of_curvature = rad, is_inner_surface=i == 0)
-            if i == 0:
-                min_cylinder_height = cylinder_height
+            layer_nodes, hemisphere_nodes, indices = self.fibonacci_sphere(samples=n_node, radius_of_curvature = rad, is_inner_surface=i == 0)
             all_nodes.append(layer_nodes)
             all_hemisphere_nodes.append(hemisphere_nodes)
-            cur_layer_height = np.copy(layer_nodes[:, 1])
-            cur_layer_height[~is_stem_wall] = cylinder_height + 100 + i * 100
-            layer_height.append(cur_layer_height)
             layer_idxs.append(indices + i * 3)
             if i == self.N_t-1:
                 x = hemisphere_nodes[:,0]
@@ -510,7 +504,6 @@ class FEMDomeSensor:
                 sphere_points = np.vstack((x, z)).T
                 surface_f2v = num_cur_node + Delaunay(sphere_points).simplices
             num_cur_node += n_node
-        layer_height = np.concatenate(layer_height, axis=0)
         all_nodes = np.concatenate(all_nodes,axis=0)
         all_hemisphere_nodes = np.concatenate(all_hemisphere_nodes,axis=0)
         point_a_idx = np.argmax(all_nodes[:, 1])
