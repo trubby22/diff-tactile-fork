@@ -54,7 +54,7 @@ class FEMDomeSensor:
         self.init_x.from_numpy(self.all_nodes.astype(np.float32))
         self.layer_id = ti.field(int, self.n_verts) # indicate layers
         self.layer_id.from_numpy(self.layer_idxs.astype(np.int32))
-        self.markers_surface_id_np = np.where(self.layer_idxs==(self.N_t-1))[0]
+        self.markers_surface_id_np = np.where(self.layer_idxs==3+2)[0]
 
         self.markers_surface_id = ti.field(int, len(self.markers_surface_id_np))
         self.markers_surface_id.from_numpy(self.markers_surface_id_np.astype(np.int32))
@@ -414,7 +414,7 @@ class FEMDomeSensor:
 
         return euler_angles
 
-    def fibonacci_sphere(self, samples, scale, is_inner_surface):
+    def fibonacci_sphere(self, samples, radius_of_curvature, is_inner_surface):
         # sample points evenly on a hemisphere
         phi = np.pi * (np.sqrt(5.0) - 1.0)  # golden angle in radians
         idx = np.arange(samples).astype(float)
@@ -422,20 +422,24 @@ class FEMDomeSensor:
         if is_inner_surface:
             lower_y = -1.0
         else:
-            lower_y = 0.0
+            lower_y = (radius_of_curvature-0.6-1.0-0.2) / radius_of_curvature
         y = lower_y + (idx / (samples - 1)) * (upper_y - lower_y)
         radius = np.sqrt(1 - y * y)
         theta = phi * idx
         x = np.cos(theta) * radius
         z = np.sin(theta) * radius
 
-        stem_wall_height = upper_y - 0.6 / scale
+        stem_wall_height = (radius_of_curvature - 0.6) / radius_of_curvature
+        rigid_stem_wall_height = (radius_of_curvature - 0.6-1.0) / radius_of_curvature
         circle_r = np.sqrt(1.0 ** 2 - stem_wall_height ** 2)
 
         hemisphere_points = np.vstack((x, y, z)).T
         points = hemisphere_points.copy()
 
-        stem_wall = points[:, 1] < stem_wall_height
+        dome = points[:, 1] >= stem_wall_height
+        stem_wall = (points[:, 1] < stem_wall_height) & (points[:, 1] >= rigid_stem_wall_height)
+        rigid_stem_wall = points[:, 1] < rigid_stem_wall_height
+
         # Compute angle in xz-plane for these points
         angles = np.arctan2(points[stem_wall, 2], points[stem_wall, 0])
         # Map xz to circle of radius circle_r
@@ -447,12 +451,17 @@ class FEMDomeSensor:
             stem_wall_hemisphere = hemisphere_points[:, 1] < stem_wall_height
             hemisphere_points[stem_wall_hemisphere, 0] = 0
             hemisphere_points[stem_wall_hemisphere, 2] = 0
-        hemisphere_points *= scale
+        hemisphere_points *= radius_of_curvature
         if is_inner_surface:
             hemisphere_points -= self.t_res
-        points *= scale
+        points *= radius_of_curvature
 
-        return points, stem_wall_height, stem_wall, hemisphere_points
+        indices = np.zeros(points.shape[0], dtype=int)
+        indices[rigid_stem_wall] = 0
+        indices[stem_wall] = 1
+        indices[dome] = 2
+
+        return points, stem_wall_height, stem_wall, hemisphere_points, indices
 
     def generate_cylinder_lateral_surface(self, samples=100, scale=1.0):
         """
@@ -485,7 +494,7 @@ class FEMDomeSensor:
             rad = self.inner_radius + i * self.t_res
             ratio = (rad**2) / (self.inner_radius**2)
             n_node = int(self.N_node * ratio)
-            layer_nodes, cylinder_height, is_stem_wall, hemisphere_nodes = self.fibonacci_sphere(samples=n_node, scale = rad, is_inner_surface=i == 0)
+            layer_nodes, cylinder_height, is_stem_wall, hemisphere_nodes, indices = self.fibonacci_sphere(samples=n_node, radius_of_curvature = rad, is_inner_surface=i == 0)
             if i == 0:
                 min_cylinder_height = cylinder_height
             all_nodes.append(layer_nodes)
@@ -493,7 +502,7 @@ class FEMDomeSensor:
             cur_layer_height = np.copy(layer_nodes[:, 1])
             cur_layer_height[~is_stem_wall] = cylinder_height + 100 + i * 100
             layer_height.append(cur_layer_height)
-            layer_idxs.append([i] * n_node)
+            layer_idxs.append(indices + i * 3)
             if i == self.N_t-1:
                 x = hemisphere_nodes[:,0]
                 y = hemisphere_nodes[:,1]
@@ -510,52 +519,37 @@ class FEMDomeSensor:
         translation_vec = np.array([0, delta_y, 0])
         all_nodes += translation_vec
         triangle_nodes = all_hemisphere_nodes
-        if False:
-            inner_volume_particles = np.zeros((100, 3), dtype=np.float32)
-            inner_volume_particles[:, 1] = np.linspace(-1 * min_cylinder_height * 0.9, min_cylinder_height * 0.9, 100)
-            triangle_nodes = np.vstack([triangle_nodes, inner_volume_particles])
 
         all_f2v = Delaunay(triangle_nodes).simplices
         layer_idxs = np.concatenate(layer_idxs,axis=0)
 
-        if False:
-            # --- Filter out any simplex containing an inner_volume_particle ---
-            n_total = triangle_nodes.shape[0]
-            n_inner_particles = inner_volume_particles.shape[0]
-            first_inner_idx = n_total - n_inner_particles
-            # Keep only those simplices where all indices are < first_inner_idx
-            mask_no_inner_particles = np.all(all_f2v < first_inner_idx, axis=1)
-            all_f2v = all_f2v[mask_no_inner_particles]
-            # --- End filter ---
-
-        if True:
-            # --- Begin filtering out inner-most layer (layer 0) ---
-            # Find indices of inner-most layer nodes
-            inner_layer_mask = (layer_idxs == 0)
-            inner_layer_indices = np.where(inner_layer_mask)[0]
-            n_inner = len(inner_layer_indices)
-            # Indices to keep (not in inner-most layer)
-            keep_mask = ~inner_layer_mask
-            keep_indices = np.where(keep_mask)[0]
-            # Build mapping from old indices to new indices
-            old_to_new = -np.ones(len(layer_idxs), dtype=int)
-            old_to_new[keep_indices] = np.arange(len(keep_indices))
-            # Filter all_nodes and layer_idxs
-            all_nodes = all_nodes[keep_mask]
-            layer_idxs = layer_idxs[keep_mask]
-            # Filter all_f2v: keep only those tetrahedra whose all nodes are not in inner-most layer
-            mask_f2v = np.all(np.isin(all_f2v, keep_indices), axis=1)
-            all_f2v = all_f2v[mask_f2v]
-            # Remap indices in all_f2v
-            all_f2v = old_to_new[all_f2v]
-            # Filter surface_f2v and remap indices (subtract n_inner)
-            if surface_f2v is not None:
-                # Only keep triangles whose all nodes are not in inner-most layer
-                mask_surf = np.all(np.isin(surface_f2v, keep_indices), axis=1)
-                surface_f2v = surface_f2v[mask_surf]
-                surface_f2v = old_to_new[surface_f2v]
-            triangle_nodes = triangle_nodes[keep_mask]
-            # --- End filtering ---
+        # --- Begin filtering out inner-most layer (layer 0) ---
+        # Find indices of inner-most layer nodes
+        inner_layer_mask = np.isin(layer_idxs, [0, 1, 2])
+        inner_layer_indices = np.where(inner_layer_mask)[0]
+        n_inner = len(inner_layer_indices)
+        # Indices to keep (not in inner-most layer)
+        keep_mask = ~inner_layer_mask
+        keep_indices = np.where(keep_mask)[0]
+        # Build mapping from old indices to new indices
+        old_to_new = -np.ones(len(layer_idxs), dtype=int)
+        old_to_new[keep_indices] = np.arange(len(keep_indices))
+        # Filter all_nodes and layer_idxs
+        all_nodes = all_nodes[keep_mask]
+        layer_idxs = layer_idxs[keep_mask]
+        # Filter all_f2v: keep only those tetrahedra whose all nodes are not in inner-most layer
+        mask_f2v = np.all(np.isin(all_f2v, keep_indices), axis=1)
+        all_f2v = all_f2v[mask_f2v]
+        # Remap indices in all_f2v
+        all_f2v = old_to_new[all_f2v]
+        # Filter surface_f2v and remap indices (subtract n_inner)
+        if surface_f2v is not None:
+            # Only keep triangles whose all nodes are not in inner-most layer
+            mask_surf = np.all(np.isin(surface_f2v, keep_indices), axis=1)
+            surface_f2v = surface_f2v[mask_surf]
+            surface_f2v = old_to_new[surface_f2v]
+        triangle_nodes = triangle_nodes[keep_mask]
+        # --- End filtering ---
 
         pickles = [
             ('all_nodes', all_nodes),
@@ -688,7 +682,7 @@ class FEMDomeSensor:
             v_out += self.dt * self.external_force_field[f,i] / self.mass
 
             ### stick the bottom layer to be fixed
-            cond = self.layer_id[i] == 0
+            cond = self.layer_id[i] % 3 == 0
             if cond:
                 v_out = self.control_vel[i]
             self.vel[f+1, i] = v_out
