@@ -164,19 +164,19 @@ class Contact:
         self.fem_sensor1.d_ori_local[None] = self.o_sensor1[f]
 
     def update(self, f):
-        self.fem_sensor1.update(f)
+        self.fem_sensor1.update_internal_forces(f)
         self.check_collision(f)
         self.collision(f)
         self.mpm_object.update(f)
-        self.fem_sensor1.update2(f)
+        self.fem_sensor1.update_external_forces(f)
         
     def update_grad(self, f):
 
-        self.fem_sensor1.update2.grad(f)
+        self.fem_sensor1.update_external_forces.grad(f)
         self.mpm_object.update.grad(f)
         self.collision.grad(f)
         self.clamp_grad(f)
-        self.fem_sensor1.update.grad(f)
+        self.fem_sensor1.update_internal_forces.grad(f)
 
     @ti.kernel
     def clamp_grad(self, f:ti.i32):

@@ -22,9 +22,9 @@ class FEMDomeSensor:
         np.set_printoptions(precision=3, floatmode='maxprec', suppress=False)
         self.sub_steps = sub_steps
         self.dt = dt
-        self.N_node = 800 # number of nodes in the most inner layer
-        self.N_t = 4+1 # thickness
-        self.t_res = 0.2 # [cm]; inter-layer distance
+        self.N_node = 200 # number of nodes in the most inner layer
+        self.N_t = 2+1 # thickness
+        self.t_res = 0.6 # [cm]; inter-layer distance
         self.inner_radius = 2.7-self.t_res # [cm]
 
         self.all_nodes, self.all_f2v, self.surface_f2v, self.layer_idxs = self.init_mesh()
@@ -33,16 +33,14 @@ class FEMDomeSensor:
         self.num_triangles = len(self.surface_f2v)
 
         self.dim = 3
-        self.dx = 2 * np.pi * self.inner_radius**2 / self.N_node
-        self.vol = self.dx * self.t_res
-        # print(f'self.dx: {self.dx}; self.vol: {self.vol}')
+        self.total_volume = self.calc_volume()
         self.rho = 1.145 * 1_000 # density [kg / m^3]
-        self.mass = self.vol * self.rho
+        self.mass_per_vertex = self.total_volume * self.rho / self.n_verts
         self.eps = 1e-10
 
         self.E_init = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
         self.nu_init = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
-        self.E_init[None], self.nu_init[None] = 0.8e4, 0.43#0.3e4, 0.445  # Young's modulus and Poisson's ratio
+        self.E_init[None], self.nu_init[None] = 8e3, 0.43 #0.3e4, 0.445  # Young's modulus and Poisson's ratio
 
         self.mu = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
         self.lam = ti.field(dtype=ti.f32, shape=(), needs_grad=False)
@@ -54,7 +52,7 @@ class FEMDomeSensor:
         self.init_x.from_numpy(self.all_nodes.astype(np.float32))
         self.layer_id = ti.field(int, self.n_verts) # indicate layers
         self.layer_id.from_numpy(self.layer_idxs.astype(np.int32))
-        self.markers_surface_id_np = np.where(self.layer_idxs==3+2)[0]
+        self.markers_surface_id_np = np.where(self.layer_idxs==self.N_t*3-1)[0]
 
         self.markers_surface_id = ti.field(int, len(self.markers_surface_id_np))
         self.markers_surface_id.from_numpy(self.markers_surface_id_np.astype(np.int32))
@@ -448,6 +446,39 @@ class FEMDomeSensor:
         points[stem_wall, 2] = circle_r * np.sin(angles)
         # y remains unchanged
 
+        # --- Begin filtering points by random subset from each region ---
+        rng = np.random.default_rng()
+        dome_indices = np.where(dome)[0]
+        elastic_stem_wall_indices = np.where(elastic_stem_wall)[0]
+        rigid_stem_wall_indices = np.where(rigid_stem_wall)[0]
+
+        rng.shuffle(dome_indices)
+        rng.shuffle(elastic_stem_wall_indices)
+        rng.shuffle(rigid_stem_wall_indices)
+
+        dome_k = int(len(dome_indices) * 1.0)
+        elastic_stem_wall_k = int(len(elastic_stem_wall_indices) * 0.25)
+        rigid_stem_wall_k = int(len(rigid_stem_wall_indices) * 0.125)
+
+        dome_indices_k = dome_indices[:dome_k]
+        elastic_stem_wall_indices_k = elastic_stem_wall_indices[:elastic_stem_wall_k]
+        rigid_stem_wall_indices_k = rigid_stem_wall_indices[:rigid_stem_wall_k]
+
+        filtered_point_indices = np.concatenate([dome_indices_k, elastic_stem_wall_indices_k, rigid_stem_wall_indices_k])
+        points = points[filtered_point_indices]
+        hemisphere_points = hemisphere_points[filtered_point_indices]
+
+        # Recompute boolean masks for filtered points
+        dome = points[:, 1] >= stem_wall_height
+        elastic_stem_wall = (points[:, 1] < stem_wall_height) & (points[:, 1] >= rigid_stem_wall_height)
+        rigid_stem_wall = points[:, 1] < rigid_stem_wall_height
+        stem_wall = elastic_stem_wall | rigid_stem_wall
+        # Update indices shape
+        indices = np.zeros(points.shape[0], dtype=int)
+        indices[rigid_stem_wall] = 0
+        indices[elastic_stem_wall] = 1
+        indices[dome] = 2
+
         if is_inner_surface:
             hemisphere_points[stem_wall, 0] = 0
             hemisphere_points[stem_wall, 2] = 0
@@ -455,11 +486,6 @@ class FEMDomeSensor:
         if is_inner_surface:
             hemisphere_points -= self.t_res
         points *= radius_of_curvature
-
-        indices = np.zeros(points.shape[0], dtype=int)
-        indices[rigid_stem_wall] = 0
-        indices[elastic_stem_wall] = 1
-        indices[dome] = 2
 
         return points, hemisphere_points, indices
 
@@ -482,6 +508,34 @@ class FEMDomeSensor:
         points = scale * np.vstack((x, y, z)).T
         return points
 
+    def calc_volume(self):
+        inner_spherical_cap_r = self.inner_radius+self.t_res
+        inner_spherical_cap_h = 0.6
+        outer_spherical_cap_r = self.inner_radius+self.t_res*(self.N_t-1)
+        outer_spherical_cap_h = 0.6
+
+        inner_cylinder_r = self.calc_spherical_cap_base_radius(inner_spherical_cap_r, inner_spherical_cap_h)
+        inner_cylinder_h = inner_spherical_cap_r - inner_spherical_cap_h
+        outer_cylinder_r = self.calc_spherical_cap_base_radius(outer_spherical_cap_r, outer_spherical_cap_h)
+        outer_cylinder_h = outer_spherical_cap_r - outer_spherical_cap_h
+
+        inner_cylinder_volume = self.calc_cylinder_volume(inner_cylinder_r, inner_cylinder_h)
+        outer_cylinder_volume = self.calc_cylinder_volume(outer_cylinder_r, outer_cylinder_h)
+        inner_spherical_cap_volume = self.calc_spherical_cap_volume(inner_spherical_cap_r, inner_spherical_cap_h)
+        outer_spherical_cap_volume = self.calc_spherical_cap_volume(outer_spherical_cap_r, outer_spherical_cap_h)
+
+        total_volume = (outer_cylinder_volume - inner_cylinder_volume) + (outer_spherical_cap_volume - inner_spherical_cap_volume)
+        return total_volume
+    
+    def calc_cylinder_volume(self, r, h):
+        return math.pi * r ** 2 * h
+
+    def calc_spherical_cap_volume(self, r, h):
+        return 1/3 * math.pi * h ** 2 * (3 * r - h)
+
+    def calc_spherical_cap_base_radius(self, r, h):
+        return math.sqrt(r ** 2 - (r - h) ** 2)
+
     def init_mesh(self):
         ## a hemisphere sensor elastomer centered around [0,0,0]
         all_nodes = []
@@ -494,6 +548,7 @@ class FEMDomeSensor:
             ratio = (rad**2) / (self.inner_radius**2)
             n_node = int(self.N_node * ratio)
             layer_nodes, hemisphere_nodes, indices = self.fibonacci_sphere(samples=n_node, radius_of_curvature = rad, is_inner_surface=i == 0)
+            n_node = layer_nodes.shape[0]
             all_nodes.append(layer_nodes)
             all_hemisphere_nodes.append(hemisphere_nodes)
             layer_idxs.append(indices + i * 3)
@@ -640,7 +695,7 @@ class FEMDomeSensor:
         self.external_force_field[f, c] += 1/3 * ext_v1
 
     @ti.kernel
-    def update(self, f:ti.i32):
+    def update_internal_forces(self, f:ti.i32):
 
         for i in range(self.n_cells):
             ia, ib, ic, id = self.f2v[i]
@@ -663,16 +718,16 @@ class FEMDomeSensor:
             verts = ti.Vector([ia, ib, ic, id])
             for k in ti.static(range(3)):
                 force = ti.Vector([H[j,k] for j in range(3)])
-                self.vel[f,verts[k]] += self.dt * force / self.mass
-                self.vel[f,verts[3]] += -1*self.dt * force / self.mass
+                self.vel[f,verts[k]] += self.dt * force / self.mass_per_vertex
+                self.vel[f,verts[3]] += -1*self.dt * force / self.mass_per_vertex
 
 
     @ti.kernel
-    def update2(self, f:ti.i32):
+    def update_external_forces(self, f:ti.i32):
         for i in range(self.n_verts):
             v_out = ti.Vector([0.0, 0.0, 0.0])
             v_out += self.vel[f,i]
-            v_out += self.dt * self.external_force_field[f,i] / self.mass
+            v_out += self.dt * self.external_force_field[f,i] / self.mass_per_vertex
 
             ### stick the bottom layer to be fixed
             cond = self.layer_id[i] % 3 == 0
@@ -940,3 +995,22 @@ class FEMDomeSensor:
         coordinates = positions[keypoint_indices]
         
         return coordinates
+
+    def compute_mean_deformation_top_10_percent(self):
+        """
+        Compute the mean Euclidean distance between the initial virtual positions and the current positions at frame 0,
+        but only for the 10% of points that deformed the most.
+        Returns:
+            float: The mean Euclidean distance of the top 10% most deformed points between self.virtual_pos[0] and self.pos[0]
+        """
+        # Convert Taichi fields to numpy arrays for frame 0
+        virtual_pos_np = self.virtual_pos.to_numpy()[0]  # shape: (n_verts, 3)
+        pos_np = self.pos.to_numpy()[0]                  # shape: (n_verts, 3)
+
+        # Compute Euclidean distances for each point
+        distances = np.linalg.norm(virtual_pos_np - pos_np, axis=1)
+        n_top = max(1, int(0.1 * len(distances)))
+        # Get the mean of the largest 10% of distances
+        top_distances = np.partition(distances, -n_top)[-n_top:]
+        mean_top_distance = np.mean(top_distances)
+        return mean_top_distance

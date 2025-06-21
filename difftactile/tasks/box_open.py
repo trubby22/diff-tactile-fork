@@ -191,7 +191,7 @@ class Contact:
         self.mpm_object.compute_new_F(f)
         self.mpm_object.svd(f)
         self.mpm_object.p2g(f)
-        self.fem_sensor1.update(f)
+        self.fem_sensor1.update_internal_forces(f)
         # calculate the collision based on current updated status, and then update external forces for next time step
         self.mpm_object.check_grid_occupy(f)
         self.check_collision(f)
@@ -202,13 +202,13 @@ class Contact:
         self.mpm_object.compute_H(f)
         self.mpm_object.compute_H_svd(f)
         self.mpm_object.compute_R(f)
-        self.fem_sensor1.update2(f)
+        self.fem_sensor1.update_external_forces(f)
 
 
 
 
     def update_grad(self, f):
-        self.fem_sensor1.update2.grad(f)
+        self.fem_sensor1.update_external_forces.grad(f)
         self.mpm_object.compute_R.grad(f)
         self.mpm_object.compute_H_svd_grad(f)
         self.mpm_object.compute_H.grad(f)
@@ -217,7 +217,7 @@ class Contact:
         self.mpm_object.grid_op.grad(f)
         self.clamp_grid(f)
         self.collision.grad(f)
-        self.fem_sensor1.update.grad(f)
+        self.fem_sensor1.update_internal_forces.grad(f)
         self.mpm_object.p2g.grad(f)
         self.mpm_object.svd_grad(f)
         self.mpm_object.compute_new_F.grad(f)

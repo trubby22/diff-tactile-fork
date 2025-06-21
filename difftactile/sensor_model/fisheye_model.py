@@ -9,7 +9,7 @@ import os
 import math
 import taichi as ti
 
-F = 200.0
+F = 230.0
 FX = F
 FY = F
 CX = 359.0

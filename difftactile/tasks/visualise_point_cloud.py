@@ -3,7 +3,10 @@ import open3d as o3d
 import pickle
 from collections import Counter
 
-with open(f'output/tactile_sensor.all_nodes.pkl', 'rb') as f:
+ts = 2000
+xs = ['pos', 'all_f2v']
+
+with open(f'output/tactile_sensor.ts={ts}.{xs[0]}.pkl', 'rb') as f:
     points = pickle.load(f)
 
 with open(f'output/fem_sensor.interp_idx_flat.pkl', 'rb') as f:
@@ -11,6 +14,10 @@ with open(f'output/fem_sensor.interp_idx_flat.pkl', 'rb') as f:
 
 with open(f'output/fem_sensor.cam_3d_nodes.pkl', 'rb') as f:
     cam_3d_nodes = pickle.load(f)
+
+with open(f'output/tactile_sensor.ts={ts}.{xs[1]}.pkl', 'rb') as f:
+    tetrahedra_indices = pickle.load(f)
+tetrahedra_indices = tetrahedra_indices.astype(int)
 
 if False:
     counter = Counter(interp_idx_flat)
@@ -43,10 +50,6 @@ if False:
     o3d.visualization.draw_geometries([pcd, axes])
 
 if True:
-    with open(f'output/tactile_sensor.all_f2v.pkl', 'rb') as f:
-        tetrahedra_indices = pickle.load(f)
-    tetrahedra_indices = tetrahedra_indices.astype(int)
-
     all_triangle_faces = []
     for tetra in tetrahedra_indices:
         v0, v1, v2, v3 = tetra
